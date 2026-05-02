@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NBA 3-Point Galaxy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #05060f;
+    color: #e0e6f0;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  #canvas-container {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+  }
+
+  canvas { display: block; }
+
+  /* ── UI OVERLAY ── */
+  .ui-layer {
+    position: fixed;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .ui-layer > * { pointer-events: auto; }
+
+  /* ── HEADER ── */
+  .header {
+    top: 0; left: 0; right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 28px 16px;
+    background: linear-gradient(to bottom, rgba(5,6,15,0.92) 0%, rgba(5,6,15,0.6) 60%, transparent 100%);
+    z-index: 20;
+  }
+
+  .header-left h1 {
+    font-family: 'Space Mono', monospace;
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: linear-gradient(135deg, #c8d6ff 0%, #7aa2f7 50%, #bb9af7 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .header-left .subtitle {
+    font-size: 11px;
+    font-weight: 300;
+    letter-spacing: 1.5px;
+    color: #6a7394;
+    margin-top: 3px;
+  }
+
+  /* ── SEARCH ── */
+  .search-wrap {
+    position: relative;
+    width: 280px;
+  }
+  .search-wrap svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    stroke: #6a7394;
+    fill: none;
+    stroke-width: 2;
+    pointer-events: none;
+  }
+  .search-wrap input {
+    width: 100%;
+    padding: 10px 14px 10px 36px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    color: #e0e6f0;
+    font-family: 'Outfit', sans-serif;
+    font-size: 13px;
+    outline: none;
+    transition: all 0.25s;
+  }
+  .search-wrap input::placeholder { color: #4a5270; }
+  .search-wrap input:focus {
+    border-color: rgba(122,162,247,0.4);
+    background: rgba(255,255,255,0.06);
+    box-shadow: 0 0 20px rgba(122,162,247,0.1);
+  }
+  .search-results {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0; right: 0;
+    background: rgba(15,17,30,0.96);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 10px;
+    max-height: 240px;
+    overflow-y: auto;
+    display: none;
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .search-results.active { display: block; }
+  .search-result-item {
+    padding: 10px 14px;
+    cursor: pointer;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transition: background 0.15s;
+  }
+  .search-result-item:hover { background: rgba(255,255,255,0.06); }
+  .search-result-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .search-result-item .team {
+    margin-left: auto;
+    font-size: 11px;
+    color: #4a5270;
+  }
+
+  /* ── CLUSTER FILTERS ── */
+  .filters {
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(10,12,22,0.85);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 14px;
+    backdrop-filter: blur(12px);
+  }
+  .filter-btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 8px;
+    background: transparent;
+    color: #c0c8de;
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover { background: rgba(255,255,255,0.04); }
+  .filter-btn.active {
+    background: rgba(255,255,255,0.07);
+    border-color: rgba(255,255,255,0.14);
+  }
+  .filter-btn.inactive {
+    opacity: 0.35;
+    border-color: rgba(255,255,255,0.03);
+  }
+  .filter-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── TOOLTIP ── */
+  .tooltip {
+    position: fixed;
+    display: none;
+    padding: 14px 18px;
+    background: rgba(10,12,25,0.94);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    backdrop-filter: blur(16px);
+    pointer-events: none;
+    z-index: 100;
+    min-width: 220px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  .tooltip.visible { display: block; }
+  .tooltip-name {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 2px;
+  }
+  .tooltip-team {
+    font-size: 11px;
+    color: #6a7394;
+    margin-bottom: 10px;
+  }
+  .tooltip-cluster {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 5px;
+    display: inline-block;
+    margin-bottom: 10px;
+  }
+  .tooltip-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+  }
+  .tooltip-stat-label {
+    font-size: 10px;
+    color: #5a6280;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  .tooltip-stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+
+  /* ── LEGEND ── */
+  .legend {
+    bottom: 80px;
+    left: 28px;
+    padding: 16px 20px;
+    background: rgba(10,12,22,0.7);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    backdrop-filter: blur(8px);
+    font-size: 11px;
+    color: #6a7394;
+    line-height: 1.8;
+  }
+  .legend strong {
+    color: #9aa4c0;
+    font-weight: 500;
+  }
+
+  /* ── STATS BADGE ── */
+  .stats-badge {
+    bottom: 80px;
+    right: 28px;
+    padding: 12px 16px;
+    background: rgba(10,12,22,0.7);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 10px;
+    backdrop-filter: blur(8px);
+  }
+  .stats-badge .count {
+    font-family: 'Space Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    color: #7aa2f7;
+  }
+  .stats-badge .label {
+    font-size: 10px;
+    color: #5a6280;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* ── PLAYER DETAIL PANEL ── */
+  .player-panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 320px;
+    height: 100vh;
+    background: rgba(8,10,20,0.94);
+    border-left: 1px solid rgba(255,255,255,0.06);
+    backdrop-filter: blur(20px);
+    z-index: 30;
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+    padding: 24px 22px;
+    pointer-events: auto;
+  }
+  .player-panel.open { transform: translateX(0); }
+  .panel-close {
+    position: absolute;
+    top: 16px; right: 16px;
+    width: 30px; height: 30px;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: rgba(255,255,255,0.04);
+    color: #8890a8;
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+  }
+  .panel-close:hover { background: rgba(255,255,255,0.08); color: #e0e6f0; }
+  .panel-player-name {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 2px;
+    margin-right: 40px;
+  }
+  .panel-team {
+    font-size: 12px;
+    color: #5a6280;
+    margin-bottom: 16px;
+  }
+  .panel-cluster-badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 4px 10px;
+    border-radius: 6px;
+    margin-bottom: 20px;
+  }
+  .panel-section-title {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #4a5270;
+    margin-bottom: 10px;
+    margin-top: 20px;
+  }
+  .panel-stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .panel-stat-label { font-size: 12px; color: #7a82a0; }
+  .panel-stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .panel-stat-bar {
+    width: 100%;
+    height: 3px;
+    background: rgba(255,255,255,0.04);
+    border-radius: 2px;
+    margin-top: 4px;
+  }
+  .panel-stat-bar-fill {
+    height: 100%;
+    border-radius: 2px;
+    transition: width 0.4s ease;
+  }
+  .panel-neighbor {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    margin-bottom: 4px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.02);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .panel-neighbor:hover { background: rgba(255,255,255,0.06); }
+  .panel-neighbor-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .panel-neighbor-name { font-size: 12px; font-weight: 500; }
+  .panel-neighbor-dist {
+    margin-left: auto;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: #4a5270;
+  }
+
+  /* scrollbar */
+  .search-results::-webkit-scrollbar { width: 4px; }
+  .search-results::-webkit-scrollbar-track { background: transparent; }
+  .search-results::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 2px; }
+  .player-panel::-webkit-scrollbar { width: 4px; }
+  .player-panel::-webkit-scrollbar-track { background: transparent; }
+  .player-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
+
+  @media (max-width: 768px) {
+    .header { padding: 14px 16px 12px; flex-direction: column; gap: 12px; align-items: flex-start; }
+    .search-wrap { width: 100%; }
+    .filters { flex-wrap: wrap; justify-content: center; }
+    .legend { display: none; }
+    .header-left h1 { font-size: 16px; }
+    .player-panel { width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<!-- HEADER -->
+<div class="ui-layer header">
+  <div class="header-left">
+    <h1>3-Point Galaxy</h1>
+    <div class="subtitle">569 NBA Players · 7 Dimensions · K-Means Clustering · 2013–2025</div>
+  </div>
+  <div class="search-wrap">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="search" placeholder="Search players..." autocomplete="off" />
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- FILTERS -->
+<div class="ui-layer filters" id="filters"></div>
+
+<!-- TOOLTIP -->
+<div class="tooltip" id="tooltip">
+  <div class="tooltip-name" id="ttName"></div>
+  <div class="tooltip-team" id="ttTeam"></div>
+  <div class="tooltip-cluster" id="ttCluster"></div>
+  <div class="tooltip-stats">
+    <div><div class="tooltip-stat-label">3PT%</div><div class="tooltip-stat-value" id="ttPct"></div></div>
+    <div><div class="tooltip-stat-label">Skill (HLM)</div><div class="tooltip-stat-value" id="ttSkill"></div></div>
+    <div><div class="tooltip-stat-label">Vol/36</div><div class="tooltip-stat-value" id="ttVol"></div></div>
+    <div><div class="tooltip-stat-label">Self-Created</div><div class="tooltip-stat-value" id="ttUnast"></div></div>
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="ui-layer legend">
+  <strong>Axes</strong><br>
+  X : PC1 &nbsp;|&nbsp; Y : PC2 &nbsp;|&nbsp; Z : PC3<br>
+  <strong>Point size</strong> : 3PA per 36<br>
+  <strong>Color</strong> : Cluster archetype<br>
+  <strong>Brightness</strong> : Skill estimate (HLM)<br>
+  <strong>Pulse</strong> : Self-creation rate
+</div>
+
+<!-- STATS BADGE -->
+<div class="ui-layer stats-badge">
+  <div class="count" id="visibleCount">569</div>
+  <div class="label">Players Visible</div>
+</div>
+
+<!-- PLAYER DETAIL PANEL -->
+<div class="player-panel" id="playerPanel">
+  <button class="panel-close" id="panelClose">&times;</button>
+  <div class="panel-player-name" id="panelName"></div>
+  <div class="panel-team" id="panelTeam"></div>
+  <div class="panel-cluster-badge" id="panelCluster"></div>
+
+  <div class="panel-section-title">Performance</div>
+  <div id="panelStats"></div>
+
+  <div class="panel-section-title">Nearest Neighbors</div>
+  <div id="panelNeighbors"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ═══════════════════════════════════════
+// DATA
+// ═══════════════════════════════════════
+const DATA = [{"n":"AJ Green","x":0.619,"y":1.312,"z":-1.182,"c":2,"p":0.418,"v":8.9,"u":0.058,"t":"MIL","s":0.024,"ns":2},{"n":"AJ Griffin","x":0.882,"y":0.987,"z":0.964,"c":2,"p":0.39,"v":6.7,"u":0.109,"t":"ATL","s":0.0079,"ns":1},{"n":"Aaron Brooks","x":-4.358,"y":-0.182,"z":-1.123,"c":3,"p":0.377,"v":5.9,"u":0.371,"t":"CHI","s":0.0148,"ns":3},{"n":"Aaron Gordon","x":-0.0,"y":-0.553,"z":0.414,"c":1,"p":0.342,"v":4.4,"u":0.163,"t":"DEN","s":-0.0132,"ns":8},{"n":"Aaron Holiday","x":0.419,"y":-0.331,"z":1.534,"c":4,"p":0.387,"v":6.2,"u":0.152,"t":"HOU","s":0.021,"ns":4},{"n":"Aaron Nesmith","x":2.695,"y":0.901,"z":0.613,"c":4,"p":0.406,"v":6.2,"u":0.028,"t":"IND","s":0.0221,"ns":3},{"n":"Aaron Wiggins","x":2.134,"y":0.743,"z":1.36,"c":4,"p":0.383,"v":7.0,"u":0.077,"t":"OKC","s":0.0061,"ns":1},{"n":"Al Horford","x":4.496,"y":-0.5,"z":1.976,"c":4,"p":0.379,"v":4.7,"u":0.015,"t":"BOS","s":0.0176,"ns":9},{"n":"Al-Farouq Aminu","x":3.741,"y":-1.227,"z":-0.004,"c":4,"p":0.351,"v":5.0,"u":0.028,"t":"POR","s":-0.0035,"ns":4},{"n":"Alan Anderson","x":0.101,"y":-0.497,"z":-3.791,"c":1,"p":0.34,"v":4.6,"u":0.142,"t":"BKN","s":-0.0122,"ns":2},{"n":"Alec Burks","x":-1.794,"y":-0.61,"z":-0.232,"c":1,"p":0.398,"v":7.1,"u":0.241,"t":"MIA","s":0.0318,"ns":7},{"n":"Aleksej Pokusevski","x":1.907,"y":0.227,"z":1.181,"c":4,"p":0.279,"v":6.2,"u":0.069,"t":"OKC","s":-0.0437,"ns":2},{"n":"Alex Abrines","x":2.198,"y":1.198,"z":-1.09,"c":2,"p":0.382,"v":7.6,"u":0.016,"t":"OKC","s":0.0064,"ns":2},{"n":"Alex Caruso","x":2.558,"y":-1.679,"z":0.648,"c":4,"p":0.383,"v":5.8,"u":0.088,"t":"OKC","s":0.0157,"ns":2},{"n":"Alex Len","x":5.02,"y":-0.644,"z":2.227,"c":4,"p":0.363,"v":4.8,"u":0.014,"t":"ATL","s":0.0021,"ns":1},{"n":"Alex Sarr","x":3.145,"y":0.305,"z":0.897,"c":4,"p":0.308,"v":6.8,"u":0.048,"t":"WAS","s":-0.0197,"ns":1},{"n":"Allen Crabbe","x":1.858,"y":2.109,"z":-1.653,"c":2,"p":0.399,"v":6.6,"u":0.034,"t":"BKN","s":0.0161,"ns":4},{"n":"Amir Coffey","x":2.604,"y":-1.076,"z":0.079,"c":4,"p":0.39,"v":5.1,"u":0.041,"t":"LAC","s":0.02,"ns":3},{"n":"Andre Iguodala","x":2.106,"y":-2.69,"z":-1.517,"c":4,"p":0.348,"v":3.7,"u":0.084,"t":"MIA","s":-0.0009,"ns":4},{"n":"Andre Roberson","x":4.912,"y":-2.675,"z":0.503,"c":4,"p":0.245,"v":2.8,"u":0.022,"t":"OKC","s":-0.037,"ns":1},{"n":"Andrew Nembhard","x":1.349,"y":-2.458,"z":0.658,"c":1,"p":0.333,"v":3.8,"u":0.115,"t":"IND","s":-0.0097,"ns":3},{"n":"Andrew Wiggins","x":0.125,"y":-0.307,"z":0.461,"c":1,"p":0.356,"v":5.1,"u":0.153,"t":"MIA","s":-0.0017,"ns":10},{"n":"Anfernee Simons","x":-3.457,"y":0.83,"z":0.76,"c":3,"p":0.381,"v":8.7,"u":0.345,"t":"POR","s":0.0167,"ns":6},{"n":"Anthony Black","x":1.743,"y":-3.34,"z":0.796,"c":1,"p":0.318,"v":3.7,"u":0.161,"t":"ORL","s":-0.0091,"ns":1},{"n":"Anthony Davis","x":2.956,"y":-1.416,"z":0.408,"c":4,"p":0.33,"v":3.7,"u":0.014,"t":"LAL","s":-0.0083,"ns":1},{"n":"Anthony Edwards","x":-5.636,"y":0.683,"z":1.465,"c":3,"p":0.361,"v":8.2,"u":0.453,"t":"MIN","s":0.0033,"ns":5},{"n":"Anthony Lamb","x":3.001,"y":-1.857,"z":-1.073,"c":4,"p":0.359,"v":5.9,"u":0.014,"t":"GSW","s":0.0014,"ns":1},{"n":"Anthony Morrow","x":2.19,"y":1.349,"z":-2.524,"c":2,"p":0.424,"v":6.4,"u":0.062,"t":"OKC","s":0.0318,"ns":3},{"n":"Anthony Tolliver","x":3.261,"y":1.052,"z":-0.095,"c":4,"p":0.391,"v":6.9,"u":0.002,"t":"MIN","s":0.0177,"ns":6},{"n":"Armoni Brooks","x":-2.195,"y":2.52,"z":-0.54,"c":2,"p":0.297,"v":10.6,"u":0.176,"t":"TOR","s":-0.0282,"ns":1},{"n":"Aron Baynes","x":4.976,"y":-1.298,"z":1.86,"c":4,"p":0.354,"v":6.3,"u":0.0,"t":"PHX","s":-0.0002,"ns":1},{"n":"Arron Afflalo","x":0.827,"y":-0.014,"z":-3.744,"c":2,"p":0.388,"v":4.2,"u":0.082,"t":"NYK","s":0.0139,"ns":3},{"n":"Austin Reaves","x":-0.176,"y":-1.855,"z":0.386,"c":1,"p":0.364,"v":5.4,"u":0.191,"t":"LAL","s":0.0101,"ns":4},{"n":"Austin Rivers","x":-1.552,"y":-1.601,"z":0.244,"c":1,"p":0.35,"v":5.6,"u":0.287,"t":"DEN","s":0.0004,"ns":6},{"n":"Avery Bradley","x":1.565,"y":0.156,"z":-1.148,"c":1,"p":0.371,"v":5.1,"u":0.1,"t":"LAL","s":0.0052,"ns":8},{"n":"Ayo Dosunmu","x":4.194,"y":-0.989,"z":1.891,"c":4,"p":0.355,"v":4.0,"u":0.047,"t":"CHI","s":-0.0015,"ns":4},{"n":"Bam Adebayo","x":1.347,"y":-3.713,"z":-0.239,"c":1,"p":0.357,"v":3.0,"u":0.114,"t":"MIA","s":0.0057,"ns":1},{"n":"Ben McLemore","x":1.365,"y":1.269,"z":-1.184,"c":2,"p":0.362,"v":7.5,"u":0.057,"t":"POR","s":-0.0079,"ns":7},{"n":"Ben Sheppard","x":3.132,"y":0.68,"z":-0.618,"c":4,"p":0.342,"v":5.8,"u":0.015,"t":"IND","s":-0.0104,"ns":1},{"n":"Bennedict Mathurin","x":-3.78,"y":-0.06,"z":-0.011,"c":3,"p":0.346,"v":5.0,"u":0.265,"t":"IND","s":-0.0095,"ns":3},{"n":"Bilal Coulibaly","x":3.064,"y":-1.036,"z":0.845,"c":4,"p":0.314,"v":4.0,"u":0.071,"t":"WAS","s":-0.0233,"ns":2},{"n":"Blake Griffin","x":-3.383,"y":-1.719,"z":0.641,"c":1,"p":0.35,"v":6.4,"u":0.329,"t":"BKN","s":0.0016,"ns":3},{"n":"Bobby Portis","x":3.539,"y":1.04,"z":1.373,"c":4,"p":0.376,"v":5.0,"u":0.009,"t":"MIL","s":0.0083,"ns":7},{"n":"Bogdan Bogdanovi\u0107","x":-1.159,"y":1.153,"z":-0.847,"c":2,"p":0.385,"v":8.1,"u":0.18,"t":"LAC","s":0.0132,"ns":8},{"n":"Bojan Bogdanovic","x":0.953,"y":0.785,"z":-0.442,"c":2,"p":0.393,"v":6.6,"u":0.093,"t":"NYK","s":0.0211,"ns":10},{"n":"Bones Hyland","x":-2.763,"y":-0.314,"z":0.957,"c":1,"p":0.368,"v":10.1,"u":0.353,"t":"LAC","s":0.007,"ns":2},{"n":"Boris Diaw","x":4.018,"y":-3.822,"z":0.495,"c":4,"p":0.32,"v":3.1,"u":0.037,"t":"SAS","s":-0.0072,"ns":1},{"n":"Bradley Beal","x":-1.403,"y":0.935,"z":-0.01,"c":3,"p":0.376,"v":5.9,"u":0.224,"t":"PHX","s":0.0099,"ns":12},{"n":"Brandin Podziemski","x":-0.065,"y":-0.751,"z":1.061,"c":1,"p":0.378,"v":5.3,"u":0.195,"t":"GSW","s":0.0111,"ns":2},{"n":"Brandon Ingram","x":-0.567,"y":0.603,"z":-0.894,"c":2,"p":0.358,"v":4.7,"u":0.143,"t":"NOP","s":-0.0045,"ns":6},{"n":"Brandon Jennings","x":-5.87,"y":-0.284,"z":-0.237,"c":3,"p":0.337,"v":5.8,"u":0.528,"t":"WAS","s":-0.0088,"ns":3},{"n":"Brandon Knight","x":-3.186,"y":-1.215,"z":0.107,"c":1,"p":0.351,"v":5.8,"u":0.364,"t":"PHX","s":0.0019,"ns":3},{"n":"Brandon Miller","x":-0.639,"y":1.422,"z":0.273,"c":2,"p":0.366,"v":9.4,"u":0.142,"t":"CHA","s":-0.0012,"ns":2},{"n":"Brian Roberts","x":-1.652,"y":-1.34,"z":-0.231,"c":1,"p":0.34,"v":4.5,"u":0.302,"t":"CHA","s":-0.0048,"ns":2},{"n":"Brice Sensabaugh","x":0.207,"y":1.65,"z":0.651,"c":2,"p":0.422,"v":9.4,"u":0.14,"t":"UTA","s":0.018,"ns":1},{"n":"Brook Lopez","x":3.466,"y":1.522,"z":2.421,"c":4,"p":0.352,"v":6.2,"u":0.022,"t":"MIL","s":-0.0117,"ns":8},{"n":"Bruce Brown","x":1.938,"y":-0.981,"z":-0.603,"c":4,"p":0.358,"v":4.0,"u":0.077,"t":"DEN","s":0.0003,"ns":1},{"n":"Bryn Forbes","x":0.543,"y":2.477,"z":-0.142,"c":2,"p":0.415,"v":7.6,"u":0.07,"t":"DEN","s":0.0284,"ns":5},{"n":"Bub Carrington","x":-3.122,"y":-0.38,"z":0.908,"c":3,"p":0.339,"v":6.0,"u":0.333,"t":"WAS","s":-0.0062,"ns":1},{"n":"Buddy Hield","x":-1.252,"y":2.123,"z":-0.401,"c":2,"p":0.397,"v":9.4,"u":0.164,"t":"GSW","s":0.0192,"ns":9},{"n":"C.J. Watson","x":-0.704,"y":-1.686,"z":-2.155,"c":1,"p":0.4,"v":4.4,"u":0.229,"t":"IND","s":0.0173,"ns":1},{"n":"CJ McCollum","x":-3.289,"y":1.121,"z":-0.122,"c":3,"p":0.397,"v":7.4,"u":0.301,"t":"NOP","s":0.0286,"ns":10},{"n":"CJ Miles","x":1.133,"y":1.836,"z":-2.158,"c":2,"p":0.366,"v":9.1,"u":0.063,"t":"MEM","s":-0.0066,"ns":6},{"n":"Cade Cunningham","x":-2.663,"y":-1.024,"z":1.352,"c":1,"p":0.342,"v":6.0,"u":0.338,"t":"DET","s":-0.0042,"ns":3},{"n":"Caleb Houstan","x":2.589,"y":1.281,"z":-2.069,"c":2,"p":0.373,"v":8.5,"u":0.014,"t":"ORL","s":-0.0005,"ns":1},{"n":"Caleb Martin","x":1.667,"y":-2.141,"z":-1.096,"c":1,"p":0.352,"v":4.4,"u":0.108,"t":"MIA","s":-0.0007,"ns":2},{"n":"Cam Reddish","x":0.319,"y":0.885,"z":0.508,"c":2,"p":0.346,"v":6.2,"u":0.15,"t":"NYK","s":-0.0108,"ns":2},{"n":"Cam Thomas","x":-4.934,"y":-0.049,"z":-0.632,"c":3,"p":0.327,"v":6.9,"u":0.36,"t":"BKN","s":-0.0187,"ns":3},{"n":"Cam Whitmore","x":-1.857,"y":1.827,"z":0.929,"c":2,"p":0.357,"v":8.5,"u":0.139,"t":"HOU","s":-0.0071,"ns":2},{"n":"Cameron Johnson","x":2.313,"y":0.679,"z":0.084,"c":4,"p":0.391,"v":7.9,"u":0.036,"t":"BKN","s":0.018,"ns":6},{"n":"Cameron Payne","x":-1.705,"y":-0.353,"z":2.141,"c":1,"p":0.38,"v":6.8,"u":0.317,"t":"NYK","s":0.0187,"ns":5},{"n":"Caris LeVert","x":-2.488,"y":-0.81,"z":1.332,"c":1,"p":0.346,"v":5.6,"u":0.325,"t":"ATL","s":-0.0043,"ns":8},{"n":"Carmelo Anthony","x":-1.19,"y":1.248,"z":-1.746,"c":2,"p":0.371,"v":5.7,"u":0.184,"t":"LAL","s":0.0031,"ns":8},{"n":"Caron Butler","x":0.867,"y":-0.081,"z":-2.376,"c":1,"p":0.388,"v":5.5,"u":0.066,"t":"DET","s":0.012,"ns":2},{"n":"Cason Wallace","x":2.992,"y":-0.262,"z":0.293,"c":4,"p":0.387,"v":4.5,"u":0.022,"t":"OKC","s":0.0127,"ns":2},{"n":"Cedi Osman","x":1.196,"y":-1.572,"z":-0.26,"c":1,"p":0.357,"v":6.9,"u":0.116,"t":"SAS","s":0.002,"ns":6},{"n":"Chandler Parsons","x":0.514,"y":0.521,"z":-1.143,"c":2,"p":0.388,"v":5.1,"u":0.091,"t":"DAL","s":0.0144,"ns":3},{"n":"Channing Frye","x":3.239,"y":0.555,"z":0.075,"c":4,"p":0.39,"v":7.3,"u":0.01,"t":"CLE","s":0.0178,"ns":4},{"n":"Charlie Villanueva","x":2.854,"y":1.18,"z":-0.285,"c":4,"p":0.324,"v":10.5,"u":0.016,"t":"DAL","s":-0.024,"ns":2},{"n":"Chet Holmgren","x":2.931,"y":0.989,"z":2.082,"c":4,"p":0.37,"v":5.2,"u":0.023,"t":"OKC","s":0.0024,"ns":1},{"n":"Chimezie Metu","x":3.12,"y":-0.144,"z":1.289,"c":4,"p":0.303,"v":5.2,"u":0.035,"t":"SAC","s":-0.0205,"ns":1},{"n":"Chris Bosh","x":3.184,"y":-1.698,"z":-0.654,"c":4,"p":0.36,"v":3.8,"u":0.027,"t":"MIA","s":0.0045,"ns":3},{"n":"Chris Boucher","x":2.826,"y":0.01,"z":-0.427,"c":4,"p":0.343,"v":5.8,"u":0.017,"t":"TOR","s":-0.0142,"ns":4},{"n":"Chris Copeland","x":1.32,"y":-0.506,"z":-2.034,"c":2,"p":0.313,"v":7.2,"u":0.038,"t":"IND","s":-0.0176,"ns":1},{"n":"Chris Duarte","x":-2.379,"y":-0.686,"z":-0.703,"c":1,"p":0.342,"v":6.5,"u":0.216,"t":"IND","s":-0.0082,"ns":2},{"n":"Chris Paul","x":-6.716,"y":-2.596,"z":0.405,"c":3,"p":0.374,"v":5.1,"u":0.583,"t":"SAS","s":0.0326,"ns":12},{"n":"Christian Braun","x":2.436,"y":-2.245,"z":1.146,"c":4,"p":0.395,"v":3.0,"u":0.112,"t":"DEN","s":0.0161,"ns":1},{"n":"Christian Wood","x":1.203,"y":-0.611,"z":1.384,"c":4,"p":0.38,"v":5.7,"u":0.104,"t":"DAL","s":0.0149,"ns":3},{"n":"Chuma Okeke","x":2.097,"y":0.728,"z":1.113,"c":4,"p":0.318,"v":7.6,"u":0.034,"t":"ORL","s":-0.0175,"ns":1},{"n":"Coby White","x":-0.008,"y":0.554,"z":1.156,"c":2,"p":0.369,"v":7.6,"u":0.168,"t":"CHI","s":0.005,"ns":6},{"n":"Cole Anthony","x":-0.917,"y":-0.702,"z":0.739,"c":1,"p":0.346,"v":5.7,"u":0.264,"t":"MEM","s":-0.0053,"ns":5},{"n":"Collin Sexton","x":-2.69,"y":-0.808,"z":0.865,"c":3,"p":0.39,"v":4.8,"u":0.29,"t":"UTA","s":0.0284,"ns":5},{"n":"Corey Brewer","x":2.821,"y":-1.848,"z":-1.932,"c":4,"p":0.271,"v":3.9,"u":0.044,"t":"HOU","s":-0.0531,"ns":3},{"n":"Corey Kispert","x":2.376,"y":0.528,"z":-0.208,"c":2,"p":0.38,"v":7.2,"u":0.032,"t":"WAS","s":0.0082,"ns":4},{"n":"Cory Joseph","x":0.791,"y":-1.79,"z":0.233,"c":1,"p":0.355,"v":3.8,"u":0.131,"t":"DET","s":0.0024,"ns":3},{"n":"Courtney Lee","x":2.439,"y":-1.65,"z":-1.377,"c":4,"p":0.391,"v":3.7,"u":0.082,"t":"NYK","s":0.0264,"ns":5},{"n":"D'Angelo Russell","x":-3.942,"y":1.3,"z":0.278,"c":3,"p":0.362,"v":8.4,"u":0.374,"t":"BKN","s":-0.0011,"ns":10},{"n":"D.J. Augustin","x":-3.113,"y":-0.851,"z":-0.596,"c":3,"p":0.386,"v":5.7,"u":0.323,"t":"LAL","s":0.0289,"ns":9},{"n":"DaQuan Jeffries","x":2.751,"y":-0.071,"z":-0.608,"c":4,"p":0.335,"v":5.5,"u":0.036,"t":"CHA","s":-0.0109,"ns":1},{"n":"Dalano Banton","x":0.016,"y":-0.28,"z":0.598,"c":1,"p":0.304,"v":6.9,"u":0.139,"t":"POR","s":-0.0289,"ns":2},{"n":"Dalton Knecht","x":0.846,"y":0.913,"z":-1.006,"c":2,"p":0.376,"v":8.2,"u":0.078,"t":"LAL","s":0.0026,"ns":1},{"n":"Damian Lillard","x":-6.198,"y":1.295,"z":0.541,"c":3,"p":0.369,"v":8.8,"u":0.525,"t":"MIL","s":0.0111,"ns":12},{"n":"Damion Lee","x":2.972,"y":-0.176,"z":0.476,"c":4,"p":0.385,"v":5.9,"u":0.028,"t":"PHX","s":0.0154,"ns":4},{"n":"Damjan Rudez","x":2.401,"y":-0.012,"z":-2.079,"c":4,"p":0.406,"v":5.8,"u":0.043,"t":"IND","s":0.0138,"ns":1},{"n":"Damyean Dotson","x":0.353,"y":1.595,"z":0.098,"c":2,"p":0.364,"v":6.1,"u":0.119,"t":"NYK","s":-0.0023,"ns":1},{"n":"Danilo Gallinari","x":0.285,"y":0.427,"z":-0.488,"c":2,"p":0.39,"v":6.7,"u":0.104,"t":"ATL","s":0.0211,"ns":7},{"n":"Danny Green","x":1.151,"y":1.112,"z":-2.219,"c":2,"p":0.391,"v":6.9,"u":0.059,"t":"PHI","s":0.0155,"ns":9},{"n":"Dante Cunningham","x":4.85,"y":-1.436,"z":-0.363,"c":4,"p":0.351,"v":3.7,"u":0.006,"t":"BKN","s":-0.0038,"ns":3},{"n":"Dante Exum","x":2.741,"y":-3.388,"z":-1.869,"c":4,"p":0.312,"v":5.2,"u":0.06,"t":"UTA","s":-0.0125,"ns":1},{"n":"Danuel House Jr.","x":1.585,"y":-0.142,"z":0.404,"c":1,"p":0.389,"v":6.6,"u":0.068,"t":"HOU","s":0.0134,"ns":2},{"n":"Dario Saric","x":3.061,"y":0.777,"z":1.135,"c":4,"p":0.362,"v":5.8,"u":0.027,"t":"GSW","s":-0.0019,"ns":5},{"n":"Darius Bazley","x":1.322,"y":-0.633,"z":1.264,"c":1,"p":0.294,"v":5.5,"u":0.11,"t":"OKC","s":-0.0331,"ns":2},{"n":"Darius Garland","x":-3.583,"y":-1.425,"z":1.296,"c":3,"p":0.386,"v":6.5,"u":0.378,"t":"CLE","s":0.0303,"ns":6},{"n":"Darius Miller","x":1.094,"y":2.566,"z":-0.341,"c":2,"p":0.385,"v":7.0,"u":0.055,"t":"NOP","s":0.0046,"ns":2},{"n":"Darren Collison","x":-0.659,"y":-2.289,"z":-1.106,"c":1,"p":0.414,"v":3.3,"u":0.208,"t":"IND","s":0.0482,"ns":5},{"n":"David Roddy","x":3.285,"y":0.213,"z":0.006,"c":4,"p":0.307,"v":6.1,"u":0.031,"t":"MEM","s":-0.0211,"ns":1},{"n":"Davion Mitchell","x":-0.247,"y":-2.014,"z":1.612,"c":1,"p":0.342,"v":4.7,"u":0.214,"t":"MIA","s":-0.0026,"ns":3},{"n":"Davis Bertans","x":1.429,"y":2.537,"z":-1.117,"c":2,"p":0.39,"v":9.3,"u":0.032,"t":"CHA","s":0.0097,"ns":7},{"n":"De'Aaron Fox","x":-4.523,"y":-0.869,"z":1.359,"c":3,"p":0.327,"v":5.2,"u":0.411,"t":"SAS","s":-0.0186,"ns":7},{"n":"De'Andre Hunter","x":1.922,"y":0.777,"z":0.694,"c":4,"p":0.374,"v":5.8,"u":0.079,"t":"CLE","s":0.005,"ns":5},{"n":"De'Anthony Melton","x":-0.173,"y":0.507,"z":0.615,"c":2,"p":0.385,"v":7.4,"u":0.17,"t":"PHI","s":0.0155,"ns":4},{"n":"DeAndre' Bembry","x":3.091,"y":-1.073,"z":0.685,"c":4,"p":0.289,"v":3.2,"u":0.06,"t":"ATL","s":-0.0235,"ns":1},{"n":"DeMar DeRozan","x":-0.984,"y":-2.263,"z":-3.131,"c":1,"p":0.32,"v":3.1,"u":0.187,"t":"SAC","s":-0.0214,"ns":4},{"n":"DeMarcus Cousins","x":2.141,"y":0.345,"z":1.235,"c":4,"p":0.349,"v":4.9,"u":0.055,"t":"NOP","s":-0.0064,"ns":3},{"n":"DeMarre Carroll","x":1.966,"y":0.629,"z":-1.505,"c":2,"p":0.363,"v":5.6,"u":0.045,"t":"BKN","s":-0.0039,"ns":5},{"n":"Dean Wade","x":3.514,"y":-0.064,"z":0.28,"c":4,"p":0.372,"v":6.4,"u":0.013,"t":"CLE","s":0.0059,"ns":3},{"n":"Dejounte Murray","x":-2.079,"y":-0.282,"z":-0.127,"c":3,"p":0.33,"v":5.3,"u":0.275,"t":"NOP","s":-0.0192,"ns":5},{"n":"Delon Wright","x":-1.274,"y":-1.979,"z":0.06,"c":1,"p":0.333,"v":3.5,"u":0.229,"t":"SAC","s":-0.008,"ns":2},{"n":"Deni Avdija","x":2.137,"y":-1.438,"z":0.8,"c":4,"p":0.334,"v":4.6,"u":0.091,"t":"POR","s":-0.0143,"ns":5},{"n":"Dennis Schr\u00f6der","x":-0.668,"y":-0.652,"z":1.148,"c":1,"p":0.34,"v":5.0,"u":0.232,"t":"DET","s":-0.0114,"ns":10},{"n":"Dennis Smith Jr.","x":-4.274,"y":-0.686,"z":1.059,"c":3,"p":0.318,"v":5.5,"u":0.386,"t":"NYK","s":-0.0162,"ns":2},{"n":"Denzel Valentine","x":0.398,"y":0.745,"z":0.765,"c":2,"p":0.357,"v":7.5,"u":0.135,"t":"CHI","s":-0.0058,"ns":3},{"n":"Derek Fisher","x":-1.123,"y":0.249,"z":-2.736,"c":1,"p":0.384,"v":5.8,"u":0.261,"t":"OKC","s":0.0082,"ns":1},{"n":"Deron Williams","x":-1.509,"y":-1.465,"z":-0.912,"c":1,"p":0.358,"v":4.6,"u":0.233,"t":"CLE","s":0.0056,"ns":4},{"n":"Derrick Jones Jr.","x":4.851,"y":-2.828,"z":0.363,"c":4,"p":0.35,"v":4.5,"u":0.006,"t":"LAC","s":0.0003,"ns":2},{"n":"Derrick Rose","x":-4.094,"y":0.819,"z":-0.499,"c":3,"p":0.28,"v":6.4,"u":0.316,"t":"CHI","s":-0.0294,"ns":1},{"n":"Derrick White","x":0.201,"y":-0.785,"z":0.445,"c":1,"p":0.365,"v":7.0,"u":0.163,"t":"BOS","s":0.0071,"ns":6},{"n":"Desmond Bane","x":-2.706,"y":0.888,"z":0.042,"c":3,"p":0.41,"v":7.7,"u":0.252,"t":"ORL","s":0.0321,"ns":5},{"n":"Devin Booker","x":-4.552,"y":0.782,"z":-0.946,"c":3,"p":0.353,"v":6.2,"u":0.334,"t":"PHX","s":-0.0081,"ns":10},{"n":"Devin Harris","x":-0.609,"y":-1.418,"z":-1.425,"c":1,"p":0.336,"v":6.1,"u":0.186,"t":"DAL","s":-0.0121,"ns":4},{"n":"Devin Vassell","x":-0.585,"y":2.13,"z":-0.87,"c":2,"p":0.372,"v":7.5,"u":0.112,"t":"SAS","s":-0.0023,"ns":4},{"n":"Devonte' Graham","x":-3.772,"y":0.786,"z":-0.804,"c":3,"p":0.361,"v":9.5,"u":0.283,"t":"SAS","s":-0.0009,"ns":4},{"n":"Dewayne Dedmon","x":4.031,"y":0.99,"z":2.153,"c":4,"p":0.382,"v":4.9,"u":0.024,"t":"ATL","s":0.0062,"ns":1},{"n":"Dillon Brooks","x":0.147,"y":1.032,"z":0.526,"c":2,"p":0.357,"v":6.3,"u":0.103,"t":"HOU","s":-0.0086,"ns":6},{"n":"Dion Waiters","x":-0.876,"y":-0.63,"z":-2.331,"c":1,"p":0.352,"v":5.6,"u":0.169,"t":"MIA","s":-0.0061,"ns":6},{"n":"Dirk Nowitzki","x":2.069,"y":1.986,"z":-0.856,"c":2,"p":0.373,"v":5.8,"u":0.013,"t":"DAL","s":0.0012,"ns":6},{"n":"Donovan Mitchell","x":-5.391,"y":-0.093,"z":0.668,"c":3,"p":0.366,"v":8.8,"u":0.45,"t":"CLE","s":0.0108,"ns":8},{"n":"Donte DiVincenzo","x":0.58,"y":1.183,"z":1.138,"c":2,"p":0.375,"v":8.0,"u":0.147,"t":"MIN","s":0.0066,"ns":6},{"n":"Dorell Wright","x":2.132,"y":0.808,"z":-1.916,"c":2,"p":0.342,"v":7.4,"u":0.029,"t":"POR","s":-0.01,"ns":1},{"n":"Dorian Finney-Smith","x":3.92,"y":-0.948,"z":0.975,"c":4,"p":0.358,"v":5.5,"u":0.028,"t":"LAL","s":0.0001,"ns":8},{"n":"Doug McDermott","x":2.141,"y":2.701,"z":-0.369,"c":2,"p":0.411,"v":6.5,"u":0.009,"t":"IND","s":0.0268,"ns":9},{"n":"Dragan Bender","x":4.182,"y":0.304,"z":1.222,"c":4,"p":0.366,"v":5.6,"u":0.008,"t":"PHX","s":0.0011,"ns":1},{"n":"Draymond Green","x":3.435,"y":-1.005,"z":0.83,"c":4,"p":0.332,"v":4.1,"u":0.034,"t":"GSW","s":-0.0166,"ns":5},{"n":"Duane Washington Jr.","x":0.292,"y":1.035,"z":0.274,"c":2,"p":0.377,"v":8.0,"u":0.074,"t":"IND","s":0.0029,"ns":1},{"n":"Duncan Robinson","x":-0.235,"y":2.382,"z":-1.777,"c":2,"p":0.391,"v":9.9,"u":0.051,"t":"MIA","s":0.0083,"ns":6},{"n":"Duop Reath","x":3.818,"y":-1.124,"z":0.821,"c":4,"p":0.361,"v":7.2,"u":0.011,"t":"POR","s":0.0018,"ns":1},{"n":"Dwayne Bacon","x":-2.66,"y":-1.382,"z":0.698,"c":1,"p":0.286,"v":4.0,"u":0.407,"t":"ORL","s":-0.0231,"ns":1},{"n":"Dwyane Wade","x":-7.043,"y":-1.639,"z":-1.373,"c":3,"p":0.331,"v":5.0,"u":0.453,"t":"MIA","s":-0.0063,"ns":1},{"n":"Dyson Daniels","x":2.776,"y":-0.563,"z":1.956,"c":4,"p":0.34,"v":3.3,"u":0.063,"t":"ATL","s":-0.006,"ns":1},{"n":"E'Twaun Moore","x":1.569,"y":1.442,"z":-0.236,"c":2,"p":0.403,"v":4.6,"u":0.065,"t":"NOP","s":0.022,"ns":4},{"n":"Emmanuel Mudiay","x":-1.492,"y":-0.982,"z":-0.692,"c":1,"p":0.32,"v":4.4,"u":0.168,"t":"NYK","s":-0.0219,"ns":3},{"n":"Eric Bledsoe","x":-2.679,"y":-0.408,"z":0.83,"c":3,"p":0.338,"v":5.1,"u":0.374,"t":"NOP","s":-0.0117,"ns":6},{"n":"Eric Gordon","x":0.266,"y":0.981,"z":1.072,"c":2,"p":0.375,"v":8.0,"u":0.159,"t":"PHX","s":0.0089,"ns":11},{"n":"Ersan Ilyasova","x":1.621,"y":1.483,"z":0.171,"c":2,"p":0.37,"v":5.5,"u":0.047,"t":"PHI","s":-0.0,"ns":4},{"n":"Evan Fournier","x":-0.372,"y":0.1,"z":-0.287,"c":1,"p":0.381,"v":6.6,"u":0.155,"t":"NYK","s":0.0145,"ns":9},{"n":"Evan Mobley","x":1.654,"y":1.096,"z":1.948,"c":4,"p":0.37,"v":3.8,"u":0.106,"t":"CLE","s":0.0025,"ns":1},{"n":"Facundo Campazzo","x":-0.037,"y":-2.538,"z":1.15,"c":1,"p":0.326,"v":5.7,"u":0.209,"t":"DEN","s":-0.0094,"ns":2},{"n":"Francisco Garcia","x":2.114,"y":0.723,"z":-2.204,"c":2,"p":0.359,"v":6.4,"u":0.043,"t":"HOU","s":-0.0033,"ns":1},{"n":"Frank Jackson","x":1.438,"y":0.657,"z":0.679,"c":2,"p":0.31,"v":6.9,"u":0.086,"t":"DET","s":-0.0293,"ns":2},{"n":"Frank Kaminsky","x":3.97,"y":-1.499,"z":0.499,"c":4,"p":0.348,"v":5.4,"u":0.008,"t":"CHA","s":-0.0023,"ns":3},{"n":"Franz Wagner","x":-1.53,"y":-1.585,"z":0.344,"c":1,"p":0.324,"v":5.1,"u":0.222,"t":"ORL","s":-0.0192,"ns":4},{"n":"Fred VanVleet","x":-3.007,"y":-0.848,"z":0.267,"c":3,"p":0.375,"v":7.7,"u":0.341,"t":"HOU","s":0.0188,"ns":8},{"n":"Furkan Korkmaz","x":0.251,"y":0.498,"z":-0.648,"c":2,"p":0.355,"v":8.0,"u":0.072,"t":"PHI","s":-0.0078,"ns":3},{"n":"GG Jackson","x":1.12,"y":-0.265,"z":0.836,"c":4,"p":0.357,"v":8.3,"u":0.137,"t":"MEM","s":-0.0012,"ns":1},{"n":"Gabe Vincent","x":-0.637,"y":-0.798,"z":-0.128,"c":1,"p":0.352,"v":7.3,"u":0.198,"t":"LAL","s":-0.003,"ns":3},{"n":"Garrett Temple","x":1.814,"y":-1.029,"z":-0.378,"c":4,"p":0.347,"v":5.4,"u":0.075,"t":"NOP","s":-0.0085,"ns":7},{"n":"Garrison Mathews","x":1.289,"y":2.982,"z":-1.463,"c":2,"p":0.394,"v":7.9,"u":0.034,"t":"ATL","s":0.0082,"ns":4},{"n":"Gary Harris","x":1.198,"y":0.456,"z":-0.56,"c":2,"p":0.377,"v":5.5,"u":0.072,"t":"ORL","s":0.009,"ns":8},{"n":"Gary Neal","x":-4.296,"y":0.093,"z":-1.896,"c":3,"p":0.344,"v":5.4,"u":0.357,"t":"MIN","s":-0.0096,"ns":2},{"n":"Gary Trent Jr.","x":-0.855,"y":1.072,"z":0.02,"c":2,"p":0.393,"v":7.9,"u":0.15,"t":"MIL","s":0.0188,"ns":6},{"n":"George Hill","x":-0.616,"y":-2.561,"z":-0.417,"c":1,"p":0.403,"v":4.7,"u":0.258,"t":"MIL","s":0.0446,"ns":6},{"n":"Georges Niang","x":3.06,"y":1.237,"z":0.814,"c":4,"p":0.402,"v":8.6,"u":0.013,"t":"ATL","s":0.0244,"ns":6},{"n":"Gerald Green","x":-0.662,"y":2.08,"z":-2.033,"c":2,"p":0.36,"v":9.2,"u":0.163,"t":"HOU","s":-0.0111,"ns":5},{"n":"Gerald Henderson","x":1.523,"y":0.407,"z":-0.759,"c":4,"p":0.353,"v":3.7,"u":0.098,"t":"PHI","s":-0.0036,"ns":1},{"n":"Giannis Antetokounmpo","x":-4.355,"y":-1.124,"z":3.316,"c":3,"p":0.284,"v":3.6,"u":0.454,"t":"MIL","s":-0.0475,"ns":6},{"n":"Glenn Robinson III","x":2.631,"y":-0.55,"z":-0.051,"c":4,"p":0.391,"v":4.0,"u":0.078,"t":"PHI","s":0.0106,"ns":1},{"n":"Goran Dragic","x":-1.91,"y":-1.016,"z":-0.951,"c":1,"p":0.369,"v":4.7,"u":0.295,"t":"MIA","s":0.0128,"ns":7},{"n":"Gordon Hayward","x":0.38,"y":-0.94,"z":0.486,"c":1,"p":0.367,"v":4.7,"u":0.156,"t":"CHA","s":0.0093,"ns":8},{"n":"Gradey Dick","x":0.93,"y":2.537,"z":-0.121,"c":2,"p":0.359,"v":7.0,"u":0.038,"t":"TOR","s":-0.0105,"ns":2},{"n":"Grant Williams","x":3.229,"y":-0.72,"z":0.525,"c":4,"p":0.395,"v":5.2,"u":0.033,"t":"CHA","s":0.0216,"ns":3},{"n":"Grayson Allen","x":1.752,"y":0.372,"z":0.961,"c":2,"p":0.417,"v":7.3,"u":0.084,"t":"PHX","s":0.0379,"ns":5},{"n":"Greivis Vasquez","x":0.05,"y":-0.857,"z":-0.432,"c":1,"p":0.38,"v":6.1,"u":0.19,"t":"TOR","s":0.0129,"ns":2},{"n":"Guerschon Yabusele","x":3.441,"y":-1.034,"z":0.182,"c":4,"p":0.38,"v":5.2,"u":0.0,"t":"PHI","s":0.0083,"ns":1},{"n":"Harrison Barnes","x":2.419,"y":-1.027,"z":0.425,"c":4,"p":0.384,"v":4.4,"u":0.069,"t":"SAS","s":0.0229,"ns":12},{"n":"Haywood Highsmith","x":4.478,"y":-2.389,"z":0.489,"c":4,"p":0.391,"v":4.8,"u":0.017,"t":"MIA","s":0.0207,"ns":2},{"n":"Herbert Jones","x":5.216,"y":-1.985,"z":1.612,"c":4,"p":0.365,"v":3.3,"u":0.024,"t":"NOP","s":0.0082,"ns":3},{"n":"Hollis Thompson","x":2.707,"y":0.795,"z":-0.822,"c":4,"p":0.394,"v":5.3,"u":0.035,"t":"PHI","s":0.0163,"ns":3},{"n":"Ian Clark","x":0.388,"y":0.39,"z":1.314,"c":1,"p":0.324,"v":6.1,"u":0.173,"t":"NOP","s":-0.0201,"ns":2},{"n":"Iman Shumpert","x":1.366,"y":0.062,"z":-0.508,"c":2,"p":0.346,"v":5.1,"u":0.113,"t":"HOU","s":-0.0122,"ns":4},{"n":"Immanuel Quickley","x":-3.296,"y":-0.067,"z":1.042,"c":3,"p":0.376,"v":8.0,"u":0.347,"t":"TOR","s":0.0149,"ns":5},{"n":"Isaac Okoro","x":4.296,"y":-3.117,"z":0.846,"c":4,"p":0.348,"v":3.8,"u":0.067,"t":"CLE","s":0.0004,"ns":3},{"n":"Isaiah Canaan","x":-3.58,"y":0.421,"z":-1.781,"c":1,"p":0.368,"v":9.1,"u":0.367,"t":"PHI","s":0.0037,"ns":2},{"n":"Isaiah Collier","x":-2.205,"y":-3.492,"z":0.574,"c":1,"p":0.249,"v":3.3,"u":0.405,"t":"UTA","s":-0.0317,"ns":1},{"n":"Isaiah Joe","x":0.519,"y":2.113,"z":0.205,"c":2,"p":0.412,"v":9.8,"u":0.058,"t":"OKC","s":0.0232,"ns":3},{"n":"Isaiah Livers","x":2.59,"y":-0.131,"z":0.237,"c":4,"p":0.358,"v":6.0,"u":0.068,"t":"DET","s":-0.0019,"ns":1},{"n":"Isaiah Stewart","x":4.828,"y":-1.282,"z":1.841,"c":4,"p":0.361,"v":4.7,"u":0.0,"t":"DET","s":0.0034,"ns":2},{"n":"Isaiah Thomas","x":-4.664,"y":1.189,"z":-1.645,"c":3,"p":0.361,"v":7.1,"u":0.37,"t":"WAS","s":-0.003,"ns":6},{"n":"Ish Smith","x":-2.494,"y":-3.827,"z":-1.074,"c":1,"p":0.348,"v":3.1,"u":0.334,"t":"WAS","s":0.0058,"ns":2},{"n":"Ish Wainright","x":3.965,"y":-1.621,"z":0.144,"c":4,"p":0.329,"v":6.8,"u":0.018,"t":"PHX","s":-0.01,"ns":1},{"n":"J.J. Barea","x":-4.584,"y":-2.649,"z":0.378,"c":3,"p":0.349,"v":5.7,"u":0.424,"t":"DAL","s":0.007,"ns":4},{"n":"JJ Redick","x":-0.149,"y":3.11,"z":-1.122,"c":2,"p":0.422,"v":7.9,"u":0.062,"t":"DAL","s":0.0321,"ns":8},{"n":"JR Smith","x":-0.165,"y":0.794,"z":-2.668,"c":2,"p":0.381,"v":7.3,"u":0.1,"t":"CLE","s":0.009,"ns":5},{"n":"Ja Morant","x":-3.81,"y":-2.315,"z":2.42,"c":3,"p":0.322,"v":4.9,"u":0.438,"t":"MEM","s":-0.0129,"ns":5},{"n":"Ja'Kobe Walter","x":1.826,"y":0.729,"z":0.639,"c":4,"p":0.349,"v":6.1,"u":0.046,"t":"TOR","s":-0.0064,"ns":1},{"n":"JaMychal Green","x":2.904,"y":1.025,"z":0.214,"c":4,"p":0.397,"v":5.8,"u":0.014,"t":"DEN","s":0.0182,"ns":3},{"n":"Jabari Parker","x":1.968,"y":-0.727,"z":0.823,"c":1,"p":0.34,"v":3.9,"u":0.073,"t":"WAS","s":-0.009,"ns":2},{"n":"Jabari Smith Jr.","x":1.326,"y":1.148,"z":-0.151,"c":2,"p":0.342,"v":5.7,"u":0.066,"t":"HOU","s":-0.017,"ns":3},{"n":"Jaden Hardy","x":0.066,"y":0.673,"z":0.616,"c":2,"p":0.374,"v":8.0,"u":0.166,"t":"DAL","s":0.0058,"ns":2},{"n":"Jaden Ivey","x":-0.741,"y":-0.968,"z":2.165,"c":1,"p":0.342,"v":5.6,"u":0.186,"t":"DET","s":-0.0049,"ns":2},{"n":"Jaden McDaniels","x":3.979,"y":-1.366,"z":0.808,"c":4,"p":0.347,"v":4.4,"u":0.022,"t":"MIN","s":-0.0069,"ns":5},{"n":"Jae Crowder","x":1.464,"y":0.2,"z":-1.009,"c":2,"p":0.344,"v":6.5,"u":0.063,"t":"MIL","s":-0.0177,"ns":9},{"n":"Jae'Sean Tate","x":4.148,"y":-1.885,"z":1.248,"c":4,"p":0.31,"v":3.5,"u":0.056,"t":"HOU","s":-0.0223,"ns":2},{"n":"Jaime Jaquez Jr.","x":3.678,"y":-3.353,"z":-1.132,"c":4,"p":0.323,"v":3.4,"u":0.031,"t":"MIA","s":-0.0088,"ns":1},{"n":"Jake Layman","x":2.085,"y":-0.89,"z":0.287,"c":4,"p":0.326,"v":4.9,"u":0.085,"t":"POR","s":-0.0117,"ns":1},{"n":"Jalen Brunson","x":-2.73,"y":-1.794,"z":0.694,"c":1,"p":0.388,"v":5.0,"u":0.324,"t":"NYK","s":0.0314,"ns":6},{"n":"Jalen Green","x":-4.248,"y":-0.582,"z":1.141,"c":3,"p":0.342,"v":8.1,"u":0.419,"t":"HOU","s":-0.0054,"ns":4},{"n":"Jalen Johnson","x":3.273,"y":-1.453,"z":1.682,"c":4,"p":0.354,"v":3.8,"u":0.028,"t":"ATL","s":0.0005,"ns":1},{"n":"Jalen McDaniels","x":3.737,"y":-0.401,"z":0.202,"c":4,"p":0.335,"v":4.3,"u":0.026,"t":"PHI","s":-0.0095,"ns":1},{"n":"Jalen Smith","x":3.747,"y":1.969,"z":2.269,"c":4,"p":0.304,"v":6.8,"u":0.007,"t":"CHI","s":-0.0349,"ns":2},{"n":"Jalen Suggs","x":-1.253,"y":-1.078,"z":0.538,"c":1,"p":0.312,"v":6.7,"u":0.247,"t":"ORL","s":-0.0289,"ns":4},{"n":"Jalen Williams","x":0.305,"y":-0.703,"z":2.408,"c":1,"p":0.383,"v":4.2,"u":0.189,"t":"OKC","s":0.0191,"ns":3},{"n":"Jalen Wilson","x":3.267,"y":-0.307,"z":0.057,"c":4,"p":0.337,"v":6.4,"u":0.0,"t":"BKN","s":-0.0093,"ns":1},{"n":"Jamal Crawford","x":-3.989,"y":-0.607,"z":-3.495,"c":3,"p":0.342,"v":6.6,"u":0.318,"t":"PHX","s":-0.0115,"ns":6},{"n":"Jamal Murray","x":-3.503,"y":-0.71,"z":0.517,"c":3,"p":0.381,"v":6.4,"u":0.345,"t":"DEN","s":0.0235,"ns":8},{"n":"Jamal Shead","x":0.56,"y":-0.5,"z":1.384,"c":1,"p":0.323,"v":5.5,"u":0.125,"t":"TOR","s":-0.0125,"ns":1},{"n":"Jameer Nelson","x":-3.607,"y":-0.032,"z":0.281,"c":3,"p":0.36,"v":5.9,"u":0.403,"t":"DEN","s":0.0045,"ns":3},{"n":"James Anderson","x":0.953,"y":1.093,"z":-1.759,"c":2,"p":0.328,"v":5.5,"u":0.096,"t":"PHI","s":-0.0153,"ns":1},{"n":"James Ennis III","x":2.144,"y":-0.233,"z":0.14,"c":4,"p":0.325,"v":4.8,"u":0.109,"t":"ORL","s":-0.0134,"ns":1},{"n":"James Harden","x":-8.084,"y":-0.728,"z":0.081,"c":3,"p":0.362,"v":8.5,"u":0.643,"t":"LAC","s":0.0167,"ns":12},{"n":"James Johnson","x":1.644,"y":-2.852,"z":-0.589,"c":1,"p":0.325,"v":3.9,"u":0.078,"t":"MIA","s":-0.0115,"ns":2},{"n":"James Jones","x":1.896,"y":1.086,"z":-2.422,"c":2,"p":0.36,"v":9.4,"u":0.016,"t":"CLE","s":-0.0044,"ns":1},{"n":"Jamison Battle","x":2.148,"y":2.457,"z":0.156,"c":2,"p":0.405,"v":9.0,"u":0.029,"t":"TOR","s":0.0096,"ns":1},{"n":"Jarace Walker","x":-0.504,"y":0.077,"z":0.789,"c":1,"p":0.405,"v":5.6,"u":0.107,"t":"IND","s":0.0151,"ns":1},{"n":"Jared Butler","x":-0.768,"y":-1.689,"z":1.957,"c":1,"p":0.355,"v":5.8,"u":0.217,"t":"PHI","s":0.0027,"ns":1},{"n":"Jared Dudley","x":3.078,"y":1.234,"z":-1.033,"c":4,"p":0.387,"v":4.5,"u":0.0,"t":"PHX","s":0.0121,"ns":4},{"n":"Jared Sullinger","x":2.861,"y":-0.384,"z":0.976,"c":4,"p":0.276,"v":3.9,"u":0.01,"t":"BOS","s":-0.0426,"ns":2},{"n":"Jaren Jackson Jr.","x":2.786,"y":0.474,"z":1.743,"c":4,"p":0.353,"v":6.6,"u":0.05,"t":"MEM","s":-0.0068,"ns":5},{"n":"Jarrett Culver","x":-0.357,"y":-0.02,"z":1.416,"c":1,"p":0.299,"v":5.3,"u":0.242,"t":"MIN","s":-0.0212,"ns":1},{"n":"Jarrett Jack","x":-2.616,"y":-1.817,"z":-3.729,"c":1,"p":0.341,"v":3.0,"u":0.206,"t":"CLE","s":-0.0039,"ns":1},{"n":"Jason Terry","x":1.558,"y":0.127,"z":-3.123,"c":2,"p":0.389,"v":6.3,"u":0.076,"t":"MIL","s":0.0139,"ns":3},{"n":"Jay Huff","x":3.643,"y":2.605,"z":2.087,"c":4,"p":0.405,"v":9.6,"u":0.012,"t":"MEM","s":0.0109,"ns":1},{"n":"Jaylen Brown","x":-1.033,"y":0.91,"z":-0.144,"c":2,"p":0.361,"v":6.3,"u":0.197,"t":"BOS","s":-0.0036,"ns":8},{"n":"Jaylen Nowell","x":-1.667,"y":0.167,"z":1.287,"c":1,"p":0.29,"v":6.6,"u":0.284,"t":"MIN","s":-0.0248,"ns":1},{"n":"Jaylen Wells","x":2.041,"y":1.348,"z":0.619,"c":2,"p":0.353,"v":6.8,"u":0.094,"t":"MEM","s":-0.0065,"ns":1},{"n":"Jayson Tatum","x":-4.742,"y":0.402,"z":0.363,"c":3,"p":0.377,"v":7.3,"u":0.382,"t":"BOS","s":0.0155,"ns":8},{"n":"Jeff Green","x":2.077,"y":-1.859,"z":-0.716,"c":4,"p":0.332,"v":4.6,"u":0.069,"t":"DEN","s":-0.0175,"ns":9},{"n":"Jeff Teague","x":-2.851,"y":-2.875,"z":1.531,"c":1,"p":0.361,"v":3.6,"u":0.384,"t":"MIN","s":0.0172,"ns":5},{"n":"Jerami Grant","x":3.002,"y":0.336,"z":-0.007,"c":4,"p":0.38,"v":5.6,"u":0.029,"t":"POR","s":0.0124,"ns":7},{"n":"Jeremiah Robinson-Earl","x":4.424,"y":-0.795,"z":1.372,"c":4,"p":0.347,"v":5.1,"u":0.018,"t":"NOP","s":-0.0059,"ns":2},{"n":"Jeremy Lamb","x":-1.181,"y":-0.912,"z":-1.641,"c":1,"p":0.341,"v":5.5,"u":0.196,"t":"SAC","s":-0.0108,"ns":5},{"n":"Jeremy Lin","x":-1.777,"y":-1.003,"z":-0.212,"c":1,"p":0.339,"v":4.0,"u":0.25,"t":"TOR","s":-0.0093,"ns":4},{"n":"Jeremy Sochan","x":2.66,"y":-4.223,"z":0.34,"c":4,"p":0.306,"v":3.6,"u":0.014,"t":"SAS","s":-0.0122,"ns":1},{"n":"Jerian Grant","x":-3.787,"y":-1.363,"z":-1.033,"c":3,"p":0.324,"v":4.0,"u":0.344,"t":"CHI","s":-0.0083,"ns":1},{"n":"Jerryd Bayless","x":0.548,"y":0.082,"z":-2.859,"c":1,"p":0.397,"v":5.0,"u":0.096,"t":"MIL","s":0.0175,"ns":2},{"n":"Jett Howard","x":0.292,"y":0.88,"z":-0.231,"c":2,"p":0.296,"v":9.6,"u":0.091,"t":"ORL","s":-0.0258,"ns":1},{"n":"Jevon Carter","x":-0.899,"y":0.762,"z":0.447,"c":2,"p":0.379,"v":7.3,"u":0.189,"t":"CHI","s":0.0085,"ns":3},{"n":"Jimmy Butler III","x":-1.468,"y":-2.041,"z":-2.854,"c":1,"p":0.341,"v":3.1,"u":0.219,"t":"PHI","s":-0.0073,"ns":6},{"n":"Jodie Meeks","x":0.566,"y":1.867,"z":-1.04,"c":2,"p":0.363,"v":5.9,"u":0.072,"t":"WAS","s":-0.0068,"ns":3},{"n":"Joe Harris","x":1.314,"y":2.722,"z":-0.512,"c":2,"p":0.435,"v":6.9,"u":0.029,"t":"BKN","s":0.0432,"ns":6},{"n":"Joe Ingles","x":-0.28,"y":-0.528,"z":0.538,"c":1,"p":0.402,"v":6.3,"u":0.204,"t":"MIL","s":0.0368,"ns":9},{"n":"Joe Johnson","x":0.75,"y":-2.168,"z":-2.191,"c":1,"p":0.387,"v":4.8,"u":0.128,"t":"UTA","s":0.0241,"ns":4},{"n":"Joel Embiid","x":0.501,"y":-0.706,"z":1.059,"c":4,"p":0.329,"v":3.9,"u":0.127,"t":"PHI","s":-0.0182,"ns":5},{"n":"John Collins","x":4.458,"y":-0.338,"z":1.656,"c":4,"p":0.356,"v":4.1,"u":0.021,"t":"UTA","s":-0.0018,"ns":4},{"n":"John Konchar","x":3.437,"y":-0.46,"z":0.313,"c":4,"p":0.339,"v":4.3,"u":0.05,"t":"MEM","s":-0.0085,"ns":1},{"n":"John Wall","x":-3.182,"y":-1.303,"z":-0.64,"c":3,"p":0.331,"v":4.4,"u":0.322,"t":"HOU","s":-0.0147,"ns":7},{"n":"Johnny Juzang","x":1.095,"y":1.466,"z":-0.531,"c":2,"p":0.376,"v":8.9,"u":0.11,"t":"UTA","s":0.0008,"ns":1},{"n":"Jon Leuer","x":4.896,"y":-0.525,"z":2.302,"c":4,"p":0.293,"v":3.1,"u":0.0,"t":"DET","s":-0.0224,"ns":1},{"n":"Jonas Jerebko","x":4.437,"y":-0.802,"z":2.14,"c":4,"p":0.364,"v":5.5,"u":0.0,"t":"GSW","s":0.0027,"ns":1},{"n":"Jonathan Isaac","x":4.102,"y":-0.615,"z":1.274,"c":4,"p":0.323,"v":4.7,"u":0.012,"t":"ORL","s":-0.013,"ns":1},{"n":"Jonathon Simmons","x":0.125,"y":-0.962,"z":-0.626,"c":1,"p":0.34,"v":3.6,"u":0.145,"t":"ORL","s":-0.0056,"ns":1},{"n":"Jordan Clarkson","x":-3.262,"y":0.361,"z":-1.484,"c":3,"p":0.338,"v":7.7,"u":0.267,"t":"UTA","s":-0.0207,"ns":10},{"n":"Jordan Crawford","x":-3.888,"y":-0.867,"z":-0.671,"c":3,"p":0.318,"v":5.5,"u":0.411,"t":"GSW","s":-0.0119,"ns":1},{"n":"Jordan Hamilton","x":-0.1,"y":0.827,"z":-0.63,"c":2,"p":0.357,"v":6.9,"u":0.129,"t":"HOU","s":-0.0033,"ns":1},{"n":"Jordan Hawkins","x":0.37,"y":2.928,"z":-1.25,"c":2,"p":0.35,"v":9.1,"u":0.05,"t":"NOP","s":-0.0167,"ns":2},{"n":"Jordan Nwora","x":0.85,"y":0.398,"z":1.586,"c":2,"p":0.378,"v":6.6,"u":0.162,"t":"IND","s":0.0081,"ns":2},{"n":"Jordan Poole","x":-2.333,"y":1.181,"z":0.834,"c":3,"p":0.339,"v":9.3,"u":0.267,"t":"WAS","s":-0.0186,"ns":6},{"n":"Jose Alvarado","x":1.352,"y":-1.097,"z":0.616,"c":4,"p":0.356,"v":7.4,"u":0.157,"t":"NOP","s":0.0006,"ns":3},{"n":"Jose Calderon","x":0.475,"y":0.089,"z":-0.797,"c":1,"p":0.432,"v":4.9,"u":0.142,"t":"NYK","s":0.0376,"ns":2},{"n":"Josh Christopher","x":-1.042,"y":-2.295,"z":-0.482,"c":1,"p":0.296,"v":5.1,"u":0.232,"t":"HOU","s":-0.0181,"ns":1},{"n":"Josh Giddey","x":2.632,"y":-1.612,"z":1.398,"c":4,"p":0.326,"v":4.3,"u":0.097,"t":"CHI","s":-0.0185,"ns":4},{"n":"Josh Green","x":4.151,"y":-1.74,"z":-0.225,"c":4,"p":0.393,"v":4.4,"u":0.021,"t":"CHA","s":0.023,"ns":3},{"n":"Josh Hart","x":1.398,"y":-1.207,"z":-0.151,"c":1,"p":0.345,"v":4.5,"u":0.087,"t":"NYK","s":-0.0091,"ns":8},{"n":"Josh Jackson","x":0.879,"y":-1.269,"z":-0.493,"c":1,"p":0.295,"v":4.6,"u":0.092,"t":"DET","s":-0.0381,"ns":3},{"n":"Josh McRoberts","x":3.626,"y":-3.91,"z":-0.361,"c":4,"p":0.362,"v":4.4,"u":0.019,"t":"CHA","s":0.0076,"ns":1},{"n":"Josh Okogie","x":3.24,"y":-1.523,"z":1.361,"c":4,"p":0.307,"v":4.8,"u":0.056,"t":"PHX","s":-0.0247,"ns":2},{"n":"Josh Richardson","x":1.236,"y":0.212,"z":-0.614,"c":2,"p":0.359,"v":5.6,"u":0.09,"t":"MIA","s":-0.0035,"ns":8},{"n":"Josh Smith","x":2.72,"y":-1.831,"z":-0.992,"c":4,"p":0.29,"v":3.5,"u":0.042,"t":"HOU","s":-0.033,"ns":2},{"n":"Jrue Holiday","x":-4.184,"y":0.064,"z":2.333,"c":3,"p":0.367,"v":5.3,"u":0.411,"t":"BOS","s":0.0114,"ns":10},{"n":"Juancho Hernangomez","x":3.594,"y":0.83,"z":0.861,"c":4,"p":0.347,"v":5.7,"u":0.016,"t":"MIN","s":-0.0103,"ns":2},{"n":"Julian Champagnie","x":2.56,"y":2.046,"z":0.215,"c":2,"p":0.364,"v":7.8,"u":0.024,"t":"SAS","s":-0.0057,"ns":2},{"n":"Julian Strawther","x":1.538,"y":1.177,"z":0.742,"c":2,"p":0.345,"v":6.9,"u":0.106,"t":"DEN","s":-0.0084,"ns":1},{"n":"Julius Randle","x":-0.546,"y":-1.006,"z":0.289,"c":1,"p":0.334,"v":5.2,"u":0.157,"t":"MIN","s":-0.0173,"ns":7},{"n":"Justin Anderson","x":2.266,"y":-1.989,"z":-0.633,"c":4,"p":0.301,"v":5.7,"u":0.052,"t":"PHI","s":-0.0181,"ns":1},{"n":"Justin Champagnie","x":2.722,"y":0.714,"z":0.837,"c":4,"p":0.383,"v":5.2,"u":0.014,"t":"WAS","s":0.0058,"ns":1},{"n":"Justin Edwards","x":1.726,"y":0.108,"z":-0.056,"c":4,"p":0.36,"v":5.9,"u":0.072,"t":"PHI","s":-0.0017,"ns":1},{"n":"Justin Hamilton","x":4.217,"y":0.571,"z":0.173,"c":4,"p":0.311,"v":5.4,"u":0.018,"t":"BKN","s":-0.0187,"ns":1},{"n":"Justin Holiday","x":1.607,"y":1.909,"z":-0.409,"c":2,"p":0.368,"v":7.0,"u":0.037,"t":"SAC","s":-0.0049,"ns":6},{"n":"Justin Jackson","x":3.497,"y":-0.704,"z":-0.178,"c":4,"p":0.332,"v":4.9,"u":0.017,"t":"DAL","s":-0.0151,"ns":2},{"n":"Justise Winslow","x":2.789,"y":-2.336,"z":-0.16,"c":4,"p":0.375,"v":4.7,"u":0.021,"t":"MIA","s":0.0085,"ns":1},{"n":"KJ Martin","x":4.573,"y":-2.248,"z":1.187,"c":4,"p":0.337,"v":3.5,"u":0.0,"t":"HOU","s":-0.0066,"ns":2},{"n":"Karl-Anthony Towns","x":2.095,"y":1.418,"z":2.128,"c":2,"p":0.405,"v":5.4,"u":0.069,"t":"NYK","s":0.0316,"ns":8},{"n":"Kawhi Leonard","x":-1.754,"y":-0.709,"z":-0.142,"c":3,"p":0.394,"v":5.0,"u":0.252,"t":"LAC","s":0.0329,"ns":10},{"n":"Keegan Murray","x":2.719,"y":1.379,"z":1.027,"c":4,"p":0.371,"v":6.9,"u":0.02,"t":"SAC","s":0.0003,"ns":3},{"n":"Keldon Johnson","x":1.594,"y":0.328,"z":0.626,"c":4,"p":0.345,"v":5.6,"u":0.082,"t":"SAS","s":-0.0138,"ns":5},{"n":"Kelly Olynyk","x":2.893,"y":0.283,"z":1.461,"c":4,"p":0.373,"v":5.4,"u":0.048,"t":"UTA","s":0.0087,"ns":8},{"n":"Kelly Oubre Jr.","x":1.396,"y":0.354,"z":-0.345,"c":2,"p":0.322,"v":6.2,"u":0.073,"t":"PHI","s":-0.0367,"ns":9},{"n":"Kemba Walker","x":-5.46,"y":0.083,"z":-0.664,"c":3,"p":0.362,"v":7.4,"u":0.454,"t":"NYK","s":0.0087,"ns":9},{"n":"Kendall Marshall","x":1.595,"y":-1.293,"z":1.804,"c":4,"p":0.399,"v":4.1,"u":0.127,"t":"LAL","s":0.0175,"ns":1},{"n":"Kendrick Nunn","x":-0.588,"y":-0.253,"z":0.75,"c":1,"p":0.363,"v":7.4,"u":0.233,"t":"WAS","s":0.003,"ns":3},{"n":"Kenrich Williams","x":3.061,"y":0.055,"z":1.757,"c":4,"p":0.386,"v":5.4,"u":0.0,"t":"OKC","s":0.0088,"ns":1},{"n":"Kent Bazemore","x":1.116,"y":-0.937,"z":-0.269,"c":1,"p":0.361,"v":5.4,"u":0.115,"t":"GSW","s":0.0015,"ns":6},{"n":"Kentavious Caldwell-Pope","x":0.888,"y":0.742,"z":-0.833,"c":2,"p":0.368,"v":5.5,"u":0.096,"t":"MEM","s":-0.0002,"ns":12},{"n":"Keon Ellis","x":1.018,"y":-0.213,"z":-0.054,"c":1,"p":0.425,"v":6.1,"u":0.068,"t":"SAC","s":0.033,"ns":2},{"n":"Keon Johnson","x":0.33,"y":-0.749,"z":-1.199,"c":1,"p":0.314,"v":7.5,"u":0.048,"t":"BKN","s":-0.0163,"ns":1},{"n":"Kevin Durant","x":-3.595,"y":2.087,"z":-1.082,"c":3,"p":0.4,"v":5.6,"u":0.317,"t":"PHX","s":0.0275,"ns":10},{"n":"Kevin Huerter","x":-0.059,"y":1.196,"z":0.589,"c":2,"p":0.374,"v":7.3,"u":0.118,"t":"CHI","s":0.0044,"ns":7},{"n":"Kevin Knox II","x":1.952,"y":1.074,"z":0.757,"c":4,"p":0.34,"v":6.3,"u":0.06,"t":"POR","s":-0.0176,"ns":3},{"n":"Kevin Love","x":2.11,"y":1.147,"z":0.081,"c":4,"p":0.371,"v":7.7,"u":0.046,"t":"MIA","s":0.0013,"ns":9},{"n":"Kevin Martin","x":0.283,"y":2.436,"z":-1.797,"c":2,"p":0.388,"v":5.1,"u":0.13,"t":"MIN","s":0.006,"ns":2},{"n":"Kevin Porter Jr.","x":-6.264,"y":-1.512,"z":0.433,"c":3,"p":0.351,"v":6.3,"u":0.489,"t":"MIL","s":0.0044,"ns":3},{"n":"Keyonte George","x":-3.534,"y":0.095,"z":0.244,"c":3,"p":0.336,"v":8.2,"u":0.325,"t":"UTA","s":-0.011,"ns":2},{"n":"Khris Middleton","x":-1.556,"y":0.858,"z":-0.255,"c":3,"p":0.393,"v":5.6,"u":0.226,"t":"MIL","s":0.0246,"ns":9},{"n":"Killian Hayes","x":-0.789,"y":-2.67,"z":-0.053,"c":1,"p":0.284,"v":4.6,"u":0.238,"t":"DET","s":-0.0217,"ns":1},{"n":"Kirk Hinrich","x":0.973,"y":-1.788,"z":-1.44,"c":1,"p":0.348,"v":3.9,"u":0.117,"t":"CHI","s":-0.0021,"ns":2},{"n":"Klay Thompson","x":0.255,"y":3.534,"z":-1.175,"c":2,"p":0.411,"v":9.1,"u":0.074,"t":"DAL","s":0.0236,"ns":10},{"n":"Kobe Bryant","x":-5.278,"y":1.174,"z":-3.864,"c":3,"p":0.289,"v":7.3,"u":0.422,"t":"LAL","s":-0.04,"ns":2},{"n":"Kris Dunn","x":4.656,"y":-2.579,"z":1.22,"c":4,"p":0.335,"v":4.5,"u":0.067,"t":"LAC","s":-0.0052,"ns":1},{"n":"Kris Murray","x":3.729,"y":-0.845,"z":1.444,"c":4,"p":0.27,"v":4.8,"u":0.02,"t":"POR","s":-0.0313,"ns":1},{"n":"Kristaps Porzi\u0146\u0123is","x":2.488,"y":1.374,"z":1.167,"c":4,"p":0.367,"v":6.1,"u":0.021,"t":"BOS","s":-0.0002,"ns":9},{"n":"Kyle Anderson","x":1.706,"y":-0.517,"z":0.449,"c":4,"p":0.36,"v":5.0,"u":0.138,"t":"MEM","s":0.0001,"ns":1},{"n":"Kyle Filipowski","x":3.375,"y":-0.73,"z":0.871,"c":4,"p":0.35,"v":5.2,"u":0.065,"t":"UTA","s":-0.003,"ns":1},{"n":"Kyle Korver","x":1.03,"y":3.314,"z":-1.877,"c":2,"p":0.44,"v":7.4,"u":0.026,"t":"MIL","s":0.0458,"ns":7},{"n":"Kyle Kuzma","x":0.189,"y":-0.401,"z":-0.466,"c":1,"p":0.332,"v":6.7,"u":0.129,"t":"MIL","s":-0.0227,"ns":8},{"n":"Kyle Lowry","x":-3.539,"y":0.605,"z":-0.711,"c":3,"p":0.375,"v":6.9,"u":0.34,"t":"PHI","s":0.0123,"ns":11},{"n":"Kyle Singler","x":3.559,"y":-0.43,"z":-0.325,"c":4,"p":0.39,"v":4.4,"u":0.026,"t":"OKC","s":0.0148,"ns":2},{"n":"Kyrie Irving","x":-4.589,"y":1.197,"z":0.131,"c":3,"p":0.392,"v":6.7,"u":0.424,"t":"DAL","s":0.0276,"ns":11},{"n":"Kyshawn George","x":0.622,"y":0.264,"z":0.61,"c":2,"p":0.322,"v":7.1,"u":0.079,"t":"WAS","s":-0.0153,"ns":1},{"n":"LaMelo Ball","x":-2.598,"y":1.192,"z":2.636,"c":3,"p":0.363,"v":9.6,"u":0.333,"t":"CHA","s":0.0019,"ns":5},{"n":"Lance Stephenson","x":-0.306,"y":-2.622,"z":0.422,"c":1,"p":0.337,"v":4.7,"u":0.237,"t":"LAL","s":-0.0051,"ns":3},{"n":"Landry Shamet","x":1.025,"y":1.668,"z":-0.336,"c":2,"p":0.384,"v":8.2,"u":0.053,"t":"PHX","s":0.0082,"ns":5},{"n":"Langston Galloway","x":1.367,"y":0.562,"z":-0.967,"c":2,"p":0.366,"v":6.6,"u":0.1,"t":"DET","s":0.0001,"ns":6},{"n":"Lauri Markkanen","x":2.655,"y":1.429,"z":0.887,"c":4,"p":0.371,"v":8.0,"u":0.021,"t":"UTA","s":0.002,"ns":8},{"n":"LeBron James","x":-4.885,"y":-1.673,"z":0.654,"c":3,"p":0.356,"v":5.5,"u":0.471,"t":"LAL","s":0.0115,"ns":12},{"n":"Lindy Waters III","x":1.533,"y":1.491,"z":-0.802,"c":2,"p":0.348,"v":8.5,"u":0.063,"t":"DET","s":-0.0092,"ns":1},{"n":"Lonnie Walker IV","x":-0.107,"y":0.807,"z":0.34,"c":2,"p":0.357,"v":7.7,"u":0.152,"t":"BKN","s":-0.006,"ns":4},{"n":"Lonzo Ball","x":-0.322,"y":0.98,"z":0.978,"c":2,"p":0.358,"v":7.4,"u":0.185,"t":"CHI","s":-0.0052,"ns":6},{"n":"Lou Williams","x":-4.511,"y":0.29,"z":-0.48,"c":3,"p":0.358,"v":6.3,"u":0.387,"t":"ATL","s":-0.0006,"ns":8},{"n":"Luc Mbah a Moute","x":3.883,"y":0.043,"z":0.625,"c":4,"p":0.336,"v":3.9,"u":0.024,"t":"HOU","s":-0.014,"ns":2},{"n":"Luguentz Dort","x":1.306,"y":1.073,"z":0.893,"c":2,"p":0.362,"v":7.2,"u":0.077,"t":"OKC","s":-0.0036,"ns":5},{"n":"Luka Don\u010di\u0107","x":-8.433,"y":-0.682,"z":2.568,"c":3,"p":0.348,"v":8.9,"u":0.704,"t":"LAL","s":0.0058,"ns":7},{"n":"Luke Babbitt","x":3.706,"y":-0.292,"z":0.45,"c":4,"p":0.414,"v":7.1,"u":0.034,"t":"MIA","s":0.0191,"ns":1},{"n":"Luke Kennard","x":0.184,"y":1.332,"z":-0.064,"c":2,"p":0.438,"v":6.9,"u":0.098,"t":"MEM","s":0.0554,"ns":8},{"n":"Luke Kornet","x":3.027,"y":0.122,"z":1.022,"c":4,"p":0.353,"v":8.6,"u":0.014,"t":"NYK","s":-0.0034,"ns":1},{"n":"Luol Deng","x":2.524,"y":-1.347,"z":-1.78,"c":4,"p":0.328,"v":3.5,"u":0.044,"t":"LAL","s":-0.0209,"ns":4},{"n":"Malachi Flynn","x":-3.324,"y":0.078,"z":-0.059,"c":3,"p":0.326,"v":6.7,"u":0.282,"t":"DET","s":-0.0174,"ns":2},{"n":"Malaki Branham","x":2.146,"y":0.288,"z":2.003,"c":4,"p":0.326,"v":5.8,"u":0.055,"t":"SAS","s":-0.0187,"ns":2},{"n":"Malcolm Brogdon","x":-1.328,"y":-1.988,"z":2.241,"c":1,"p":0.387,"v":5.5,"u":0.307,"t":"POR","s":0.0351,"ns":7},{"n":"Malik Beasley","x":0.075,"y":2.171,"z":-0.697,"c":2,"p":0.393,"v":9.8,"u":0.087,"t":"DET","s":0.0136,"ns":7},{"n":"Malik Monk","x":-1.763,"y":0.878,"z":0.578,"c":1,"p":0.347,"v":8.2,"u":0.193,"t":"SAC","s":-0.0142,"ns":8},{"n":"Manu Ginobili","x":-0.561,"y":-1.374,"z":-1.019,"c":1,"p":0.362,"v":5.8,"u":0.174,"t":"SAS","s":0.0067,"ns":5},{"n":"Marc Gasol","x":3.829,"y":-0.062,"z":2.259,"c":4,"p":0.364,"v":4.2,"u":0.019,"t":"TOR","s":0.0048,"ns":3},{"n":"Marco Belinelli","x":-0.235,"y":0.995,"z":-1.56,"c":2,"p":0.372,"v":6.5,"u":0.115,"t":"SAS","s":0.0026,"ns":7},{"n":"Marcus Morris Sr.","x":0.898,"y":0.299,"z":-0.928,"c":2,"p":0.378,"v":5.8,"u":0.087,"t":"LAC","s":0.0119,"ns":10},{"n":"Marcus Sasser","x":-3.31,"y":-1.616,"z":3.429,"c":3,"p":0.376,"v":6.2,"u":0.356,"t":"DET","s":0.0125,"ns":1},{"n":"Marcus Smart","x":0.087,"y":0.012,"z":-0.5,"c":1,"p":0.319,"v":5.8,"u":0.157,"t":"BOS","s":-0.0351,"ns":9},{"n":"Marcus Thornton","x":-0.594,"y":1.159,"z":-2.467,"c":2,"p":0.337,"v":7.6,"u":0.145,"t":"WAS","s":-0.017,"ns":2},{"n":"Mario Chalmers","x":0.23,"y":-2.619,"z":-2.639,"c":1,"p":0.319,"v":4.1,"u":0.109,"t":"MEM","s":-0.0184,"ns":3},{"n":"Mario Hezonja","x":1.127,"y":0.033,"z":-0.068,"c":1,"p":0.345,"v":5.3,"u":0.143,"t":"ORL","s":-0.0083,"ns":2},{"n":"Markieff Morris","x":3.492,"y":-0.687,"z":0.505,"c":4,"p":0.345,"v":4.7,"u":0.014,"t":"LAL","s":-0.0101,"ns":6},{"n":"Marquese Chriss","x":4.944,"y":-0.184,"z":1.583,"c":4,"p":0.305,"v":4.5,"u":0.007,"t":"PHX","s":-0.0287,"ns":2},{"n":"Marreese Speights","x":3.135,"y":0.628,"z":0.554,"c":4,"p":0.37,"v":10.1,"u":0.021,"t":"ORL","s":0.003,"ns":2},{"n":"Martell Webster","x":2.785,"y":-0.518,"z":-1.623,"c":4,"p":0.394,"v":6.1,"u":0.048,"t":"WAS","s":0.0111,"ns":1},{"n":"Marvin Williams","x":3.734,"y":-0.344,"z":-0.32,"c":4,"p":0.374,"v":5.5,"u":0.013,"t":"CHA","s":0.0104,"ns":6},{"n":"Matas Buzelis","x":3.019,"y":1.058,"z":0.687,"c":4,"p":0.361,"v":6.3,"u":0.021,"t":"CHI","s":-0.003,"ns":1},{"n":"Matisse Thybulle","x":3.541,"y":-0.602,"z":0.407,"c":4,"p":0.342,"v":5.4,"u":0.0,"t":"POR","s":-0.0067,"ns":1},{"n":"Matt Barnes","x":2.555,"y":-1.017,"z":-1.328,"c":4,"p":0.34,"v":5.8,"u":0.049,"t":"GSW","s":-0.0138,"ns":4},{"n":"Matthew Dellavedova","x":1.147,"y":-1.626,"z":-0.767,"c":4,"p":0.396,"v":4.3,"u":0.145,"t":"MIL","s":0.0272,"ns":3},{"n":"Maurice Harkless","x":4.116,"y":-3.107,"z":-1.071,"c":4,"p":0.351,"v":3.1,"u":0.0,"t":"POR","s":0.0009,"ns":1},{"n":"Max Christie","x":1.752,"y":-0.673,"z":-0.83,"c":4,"p":0.366,"v":5.3,"u":0.043,"t":"DAL","s":0.002,"ns":1},{"n":"Max Strus","x":0.978,"y":1.651,"z":-1.605,"c":2,"p":0.374,"v":8.7,"u":0.041,"t":"CLE","s":-0.0004,"ns":4},{"n":"Maxi Kleber","x":4.646,"y":-1.508,"z":1.337,"c":4,"p":0.366,"v":5.8,"u":0.003,"t":"DAL","s":0.0081,"ns":4},{"n":"Meyers Leonard","x":3.81,"y":-1.24,"z":1.007,"c":4,"p":0.362,"v":6.2,"u":0.007,"t":"POR","s":0.0041,"ns":2},{"n":"Michael Carter-Williams","x":-2.746,"y":-0.187,"z":0.63,"c":3,"p":0.264,"v":3.1,"u":0.345,"t":"PHI","s":-0.0313,"ns":1},{"n":"Michael Porter Jr.","x":-0.316,"y":2.644,"z":-1.43,"c":2,"p":0.412,"v":7.6,"u":0.068,"t":"DEN","s":0.0224,"ns":4},{"n":"Mikal Bridges","x":2.307,"y":0.418,"z":-0.863,"c":4,"p":0.372,"v":5.0,"u":0.046,"t":"NYK","s":0.0035,"ns":7},{"n":"Mike Conley","x":-2.977,"y":-1.885,"z":0.376,"c":3,"p":0.392,"v":6.1,"u":0.326,"t":"MIN","s":0.0382,"ns":11},{"n":"Mike Dunleavy","x":2.087,"y":0.357,"z":-1.439,"c":2,"p":0.393,"v":4.8,"u":0.039,"t":"CHI","s":0.0139,"ns":2},{"n":"Mike Miller","x":3.036,"y":0.443,"z":-0.866,"c":4,"p":0.459,"v":4.9,"u":0.028,"t":"MEM","s":0.0329,"ns":1},{"n":"Mike Muscala","x":3.932,"y":1.053,"z":1.538,"c":4,"p":0.371,"v":7.7,"u":0.01,"t":"BOS","s":0.003,"ns":4},{"n":"Mike Scott","x":3.084,"y":0.165,"z":-0.212,"c":4,"p":0.356,"v":6.0,"u":0.005,"t":"PHI","s":-0.005,"ns":4},{"n":"Miles Bridges","x":0.244,"y":-1.233,"z":0.353,"c":1,"p":0.341,"v":5.8,"u":0.113,"t":"CHA","s":-0.011,"ns":6},{"n":"Miles McBride","x":-1.11,"y":-0.307,"z":-1.989,"c":1,"p":0.386,"v":7.1,"u":0.146,"t":"NYK","s":0.0124,"ns":2},{"n":"Milos Teodosic","x":-2.236,"y":0.868,"z":1.325,"c":3,"p":0.383,"v":7.2,"u":0.295,"t":"LAC","s":0.0081,"ns":1},{"n":"Mindaugas Kuzminskas","x":1.957,"y":0.638,"z":-0.247,"c":4,"p":0.321,"v":6.0,"u":0.093,"t":"NYK","s":-0.0154,"ns":1},{"n":"Mirza Teletovic","x":1.774,"y":1.867,"z":-1.188,"c":2,"p":0.36,"v":9.0,"u":0.029,"t":"MIL","s":-0.0099,"ns":4},{"n":"Mo Bamba","x":3.421,"y":2.085,"z":1.53,"c":4,"p":0.381,"v":5.5,"u":0.009,"t":"ORL","s":0.0031,"ns":1},{"n":"Mo Williams","x":-3.567,"y":-0.509,"z":-1.904,"c":1,"p":0.356,"v":5.4,"u":0.32,"t":"CHA","s":0.0006,"ns":2},{"n":"Monta Ellis","x":-2.038,"y":-3.305,"z":-2.378,"c":1,"p":0.308,"v":3.3,"u":0.244,"t":"IND","s":-0.0218,"ns":3},{"n":"Monte Morris","x":0.607,"y":-0.933,"z":0.303,"c":1,"p":0.393,"v":4.3,"u":0.143,"t":"WAS","s":0.0251,"ns":4},{"n":"Moritz Wagner","x":2.97,"y":1.866,"z":1.542,"c":4,"p":0.328,"v":7.5,"u":0.015,"t":"ORL","s":-0.0148,"ns":1},{"n":"Moses Moody","x":2.042,"y":0.378,"z":-0.726,"c":2,"p":0.372,"v":6.7,"u":0.064,"t":"GSW","s":0.003,"ns":2},{"n":"Mychal Mulder","x":2.758,"y":2.508,"z":0.362,"c":2,"p":0.394,"v":10.0,"u":0.0,"t":"GSW","s":0.0059,"ns":1},{"n":"Myles Turner","x":3.547,"y":0.441,"z":2.187,"c":4,"p":0.361,"v":5.1,"u":0.012,"t":"IND","s":-0.0003,"ns":7},{"n":"Naji Marshall","x":3.06,"y":-2.612,"z":-0.18,"c":4,"p":0.289,"v":4.2,"u":0.007,"t":"DAL","s":-0.0317,"ns":2},{"n":"Naz Reid","x":3.696,"y":-0.048,"z":2.041,"c":4,"p":0.367,"v":6.2,"u":0.02,"t":"MIN","s":0.0054,"ns":5},{"n":"Nemanja Bjelica","x":2.953,"y":0.38,"z":0.832,"c":4,"p":0.389,"v":5.3,"u":0.048,"t":"SAC","s":0.0172,"ns":4},{"n":"Nick Smith Jr.","x":0.248,"y":0.326,"z":1.389,"c":2,"p":0.34,"v":8.0,"u":0.183,"t":"CHA","s":-0.0074,"ns":1},{"n":"Nick Young","x":-2.663,"y":1.783,"z":-3.728,"c":2,"p":0.372,"v":8.3,"u":0.197,"t":"GSW","s":-0.0013,"ns":5},{"n":"Nickeil Alexander-Walker","x":1.432,"y":-0.395,"z":-0.047,"c":4,"p":0.358,"v":7.2,"u":0.06,"t":"MIN","s":-0.0032,"ns":4},{"n":"Nicolas Batum","x":1.556,"y":-0.434,"z":-1.207,"c":4,"p":0.375,"v":5.3,"u":0.096,"t":"LAC","s":0.0128,"ns":11},{"n":"Nicolo Melli","x":3.231,"y":0.59,"z":0.8,"c":4,"p":0.342,"v":6.9,"u":0.0,"t":"NOP","s":-0.0083,"ns":1},{"n":"Nik Stauskas","x":-0.489,"y":-0.567,"z":-1.024,"c":1,"p":0.355,"v":6.3,"u":0.137,"t":"CLE","s":-0.0032,"ns":3},{"n":"Nikola Joki\u0107","x":0.984,"y":-0.658,"z":0.193,"c":1,"p":0.36,"v":3.9,"u":0.113,"t":"DEN","s":0.003,"ns":7},{"n":"Nikola Jovi\u0107","x":2.862,"y":-1.701,"z":-0.224,"c":4,"p":0.371,"v":6.5,"u":0.051,"t":"MIA","s":0.0059,"ns":1},{"n":"Nikola Mirotic","x":1.264,"y":1.732,"z":-0.471,"c":2,"p":0.358,"v":8.1,"u":0.073,"t":"MIL","s":-0.0102,"ns":5},{"n":"Nikola Vu\u010devi\u0107","x":4.218,"y":1.234,"z":3.136,"c":4,"p":0.347,"v":4.8,"u":0.003,"t":"CHI","s":-0.0131,"ns":8},{"n":"Noah Clowney","x":2.751,"y":0.382,"z":0.589,"c":4,"p":0.333,"v":9.0,"u":0.046,"t":"BKN","s":-0.0113,"ns":1},{"n":"Norman Powell","x":-0.355,"y":0.276,"z":-1.193,"c":2,"p":0.388,"v":6.3,"u":0.106,"t":"LAC","s":0.0186,"ns":9},{"n":"Norris Cole","x":2.238,"y":-4.446,"z":-2.497,"c":1,"p":0.328,"v":3.3,"u":0.09,"t":"NOP","s":-0.0064,"ns":2},{"n":"O.J. Mayo","x":-0.617,"y":1.717,"z":-2.937,"c":2,"p":0.358,"v":5.8,"u":0.148,"t":"MIL","s":-0.0076,"ns":2},{"n":"OG Anunoby","x":2.712,"y":-0.657,"z":0.104,"c":4,"p":0.373,"v":5.5,"u":0.053,"t":"NYK","s":0.0099,"ns":8},{"n":"Obi Toppin","x":3.569,"y":-0.911,"z":0.531,"c":4,"p":0.355,"v":6.4,"u":0.02,"t":"IND","s":-0.0029,"ns":4},{"n":"Ochai Agbaji","x":3.24,"y":0.63,"z":0.813,"c":4,"p":0.35,"v":5.5,"u":0.023,"t":"TOR","s":-0.0113,"ns":3},{"n":"Omri Casspi","x":2.092,"y":-0.274,"z":0.336,"c":4,"p":0.378,"v":5.1,"u":0.12,"t":"SAC","s":0.0097,"ns":2},{"n":"Oshae Brissett","x":2.651,"y":0.262,"z":0.216,"c":4,"p":0.35,"v":5.5,"u":0.036,"t":"IND","s":-0.0051,"ns":1},{"n":"Otto Porter Jr.","x":2.43,"y":0.33,"z":0.005,"c":4,"p":0.404,"v":4.9,"u":0.065,"t":"GSW","s":0.0288,"ns":5},{"n":"P.J. Tucker","x":4.211,"y":-1.787,"z":-1.335,"c":4,"p":0.368,"v":3.8,"u":0.031,"t":"MIA","s":0.0093,"ns":8},{"n":"P.J. Washington","x":2.257,"y":0.192,"z":0.74,"c":4,"p":0.363,"v":5.6,"u":0.057,"t":"DAL","s":0.0,"ns":6},{"n":"PJ Hairston","x":2.517,"y":-0.53,"z":-2.256,"c":4,"p":0.29,"v":6.6,"u":0.029,"t":"MEM","s":-0.0258,"ns":1},{"n":"Pablo Prigioni","x":0.408,"y":-2.649,"z":0.278,"c":1,"p":0.343,"v":5.0,"u":0.193,"t":"HOU","s":-0.0007,"ns":1},{"n":"Paolo Banchero","x":-4.095,"y":-1.248,"z":1.65,"c":3,"p":0.319,"v":5.0,"u":0.382,"t":"ORL","s":-0.0178,"ns":3},{"n":"Pascal Siakam","x":1.705,"y":-2.052,"z":0.502,"c":4,"p":0.347,"v":4.1,"u":0.109,"t":"IND","s":-0.0018,"ns":7},{"n":"Pat Connaughton","x":2.48,"y":0.683,"z":0.216,"c":4,"p":0.352,"v":6.1,"u":0.045,"t":"MIL","s":-0.0109,"ns":7},{"n":"Patrick Beverley","x":1.057,"y":-0.866,"z":-0.183,"c":4,"p":0.366,"v":5.3,"u":0.122,"t":"MIL","s":0.0081,"ns":9},{"n":"Patrick Patterson","x":4.14,"y":-0.005,"z":0.384,"c":4,"p":0.373,"v":5.6,"u":0.006,"t":"LAC","s":0.0075,"ns":5},{"n":"Patrick Williams","x":2.35,"y":-0.218,"z":1.217,"c":2,"p":0.382,"v":5.2,"u":0.04,"t":"CHI","s":0.0112,"ns":2},{"n":"Patty Mills","x":-0.776,"y":0.731,"z":-0.807,"c":1,"p":0.387,"v":8.0,"u":0.194,"t":"BKN","s":0.0192,"ns":9},{"n":"Paul George","x":-3.072,"y":1.173,"z":-0.564,"c":3,"p":0.385,"v":7.9,"u":0.311,"t":"PHI","s":0.0182,"ns":11},{"n":"Paul Millsap","x":3.218,"y":-1.909,"z":0.267,"c":4,"p":0.337,"v":3.3,"u":0.04,"t":"ATL","s":-0.0094,"ns":4},{"n":"Paul Pierce","x":1.536,"y":1.131,"z":-1.846,"c":2,"p":0.357,"v":6.0,"u":0.031,"t":"LAC","s":-0.0072,"ns":3},{"n":"Payton Pritchard","x":-0.538,"y":-0.886,"z":0.41,"c":1,"p":0.404,"v":8.3,"u":0.175,"t":"BOS","s":0.0334,"ns":4},{"n":"Pero Antic","x":3.27,"y":-0.68,"z":-0.384,"c":4,"p":0.313,"v":6.3,"u":0.009,"t":"ATL","s":-0.0235,"ns":2},{"n":"Quentin Grimes","x":0.48,"y":0.897,"z":-0.698,"c":2,"p":0.373,"v":7.8,"u":0.074,"t":"PHI","s":0.0025,"ns":4},{"n":"Quincy Acy","x":3.871,"y":0.126,"z":0.906,"c":4,"p":0.351,"v":7.5,"u":0.01,"t":"BKN","s":-0.0043,"ns":1},{"n":"Quincy Pondexter","x":1.911,"y":-2.195,"z":-1.834,"c":1,"p":0.373,"v":4.9,"u":0.088,"t":"NOP","s":0.007,"ns":1},{"n":"Quinn Cook","x":-0.607,"y":0.199,"z":1.915,"c":1,"p":0.398,"v":6.7,"u":0.185,"t":"GSW","s":0.014,"ns":1},{"n":"Quinten Post","x":4.047,"y":1.003,"z":1.95,"c":4,"p":0.408,"v":9.4,"u":0.0,"t":"GSW","s":0.0149,"ns":1},{"n":"R.J. Hampton","x":0.545,"y":-1.561,"z":0.104,"c":1,"p":0.35,"v":4.7,"u":0.094,"t":"ORL","s":-0.0007,"ns":1},{"n":"RJ Barrett","x":2.155,"y":-0.442,"z":0.104,"c":4,"p":0.348,"v":5.1,"u":0.056,"t":"TOR","s":-0.0098,"ns":6},{"n":"Rajon Rondo","x":-0.537,"y":-4.408,"z":-0.93,"c":1,"p":0.361,"v":2.4,"u":0.29,"t":"SAC","s":0.0089,"ns":1},{"n":"Randy Foye","x":-0.684,"y":0.685,"z":0.346,"c":2,"p":0.341,"v":6.8,"u":0.241,"t":"BKN","s":-0.0146,"ns":4},{"n":"Rasual Butler","x":1.144,"y":0.539,"z":-3.25,"c":2,"p":0.387,"v":5.6,"u":0.055,"t":"WAS","s":0.0061,"ns":1},{"n":"Raul Neto","x":1.872,"y":-1.07,"z":1.019,"c":4,"p":0.39,"v":4.2,"u":0.063,"t":"WAS","s":0.0124,"ns":1},{"n":"Ray Allen","x":2.723,"y":-1.006,"z":-1.723,"c":4,"p":0.375,"v":5.7,"u":0.043,"t":"MIA","s":0.005,"ns":1},{"n":"Raymond Felton","x":-1.487,"y":-4.152,"z":-1.176,"c":1,"p":0.316,"v":4.3,"u":0.249,"t":"OKC","s":-0.012,"ns":3},{"n":"Reggie Bullock Jr.","x":3.029,"y":0.398,"z":-0.066,"c":4,"p":0.394,"v":6.8,"u":0.028,"t":"DAL","s":0.0202,"ns":5},{"n":"Reggie Jackson","x":-2.64,"y":-1.879,"z":-0.036,"c":1,"p":0.349,"v":5.6,"u":0.354,"t":"DEN","s":0.0026,"ns":10},{"n":"Richard Jefferson","x":2.48,"y":-0.958,"z":-2.073,"c":4,"p":0.375,"v":4.6,"u":0.034,"t":"CLE","s":0.009,"ns":3},{"n":"Ricky Council IV","x":0.835,"y":-3.101,"z":0.207,"c":1,"p":0.258,"v":6.1,"u":0.073,"t":"PHI","s":-0.0314,"ns":1},{"n":"Ricky Rubio","x":1.286,"y":-2.514,"z":-0.007,"c":1,"p":0.33,"v":4.2,"u":0.134,"t":"IND","s":-0.015,"ns":7},{"n":"Robert Covington","x":1.0,"y":3.032,"z":-1.313,"c":2,"p":0.363,"v":7.4,"u":0.06,"t":"LAC","s":-0.0138,"ns":8},{"n":"Rodions Kurucs","x":2.911,"y":0.75,"z":2.051,"c":4,"p":0.315,"v":5.1,"u":0.086,"t":"BKN","s":-0.0169,"ns":1},{"n":"Rodney Hood","x":-1.387,"y":-1.899,"z":-2.117,"c":1,"p":0.366,"v":6.2,"u":0.24,"t":"POR","s":0.0109,"ns":5},{"n":"Rodney McGruder","x":2.306,"y":-1.275,"z":-1.616,"c":2,"p":0.34,"v":4.7,"u":0.038,"t":"LAC","s":-0.0096,"ns":2},{"n":"Ronnie Price","x":-0.426,"y":-1.743,"z":-2.945,"c":1,"p":0.347,"v":5.8,"u":0.132,"t":"PHX","s":-0.0028,"ns":1},{"n":"Royce O'Neale","x":3.194,"y":-1.163,"z":0.865,"c":4,"p":0.386,"v":5.6,"u":0.026,"t":"PHX","s":0.0233,"ns":7},{"n":"Rudy Gay","x":0.575,"y":-0.362,"z":-0.305,"c":1,"p":0.356,"v":4.7,"u":0.164,"t":"UTA","s":-0.002,"ns":7},{"n":"Rui Hachimura","x":4.12,"y":-0.353,"z":0.326,"c":4,"p":0.417,"v":4.6,"u":0.024,"t":"LAL","s":0.0287,"ns":2},{"n":"Russell Westbrook","x":-3.89,"y":-1.255,"z":0.908,"c":3,"p":0.304,"v":4.8,"u":0.435,"t":"DEN","s":-0.0362,"ns":11},{"n":"Ryan Anderson","x":2.421,"y":1.547,"z":0.999,"c":4,"p":0.381,"v":7.4,"u":0.035,"t":"HOU","s":0.0088,"ns":5},{"n":"Ryan Arcidiacono","x":1.338,"y":-2.686,"z":0.648,"c":1,"p":0.375,"v":4.0,"u":0.136,"t":"CHI","s":0.0109,"ns":1},{"n":"Ryan Dunn","x":4.043,"y":-1.451,"z":-0.225,"c":4,"p":0.308,"v":6.7,"u":0.0,"t":"PHX","s":-0.0178,"ns":1},{"n":"Saddiq Bey","x":1.369,"y":0.382,"z":0.26,"c":2,"p":0.353,"v":7.4,"u":0.072,"t":"ATL","s":-0.0091,"ns":4},{"n":"Sam Dekker","x":3.258,"y":-0.868,"z":0.401,"c":4,"p":0.321,"v":4.7,"u":0.033,"t":"HOU","s":-0.0131,"ns":1},{"n":"Sam Hauser","x":2.205,"y":1.628,"z":-0.172,"c":4,"p":0.419,"v":9.4,"u":0.031,"t":"BOS","s":0.0282,"ns":3},{"n":"Sam Merrill","x":0.985,"y":3.09,"z":-0.801,"c":2,"p":0.388,"v":10.7,"u":0.021,"t":"CLE","s":0.003,"ns":2},{"n":"Santi Aldama","x":2.618,"y":0.934,"z":0.518,"c":4,"p":0.357,"v":6.5,"u":0.034,"t":"MEM","s":-0.0071,"ns":3},{"n":"Scoot Henderson","x":-2.617,"y":-0.846,"z":2.405,"c":1,"p":0.34,"v":5.7,"u":0.316,"t":"POR","s":-0.0054,"ns":2},{"n":"Scottie Barnes","x":0.159,"y":-1.336,"z":0.173,"c":1,"p":0.298,"v":3.9,"u":0.166,"t":"TOR","s":-0.0373,"ns":4},{"n":"Scotty Pippen Jr.","x":2.306,"y":0.26,"z":0.562,"c":4,"p":0.399,"v":4.7,"u":0.023,"t":"MEM","s":0.0129,"ns":1},{"n":"Sean Kilpatrick","x":-0.195,"y":-0.551,"z":-0.414,"c":1,"p":0.345,"v":6.2,"u":0.248,"t":"BKN","s":-0.0037,"ns":1},{"n":"Serge Ibaka","x":3.699,"y":0.764,"z":1.102,"c":4,"p":0.355,"v":3.9,"u":0.019,"t":"TOR","s":-0.0069,"ns":6},{"n":"Sergio Rodriguez","x":-4.136,"y":-2.519,"z":0.985,"c":3,"p":0.365,"v":6.0,"u":0.435,"t":"PHI","s":0.0079,"ns":1},{"n":"Seth Curry","x":-0.945,"y":1.092,"z":-0.147,"c":2,"p":0.435,"v":6.4,"u":0.184,"t":"CHA","s":0.0543,"ns":7},{"n":"Shabazz Napier","x":-4.042,"y":-0.309,"z":-0.178,"c":3,"p":0.341,"v":6.6,"u":0.383,"t":"WAS","s":-0.0085,"ns":3},{"n":"Shaedon Sharpe","x":-2.639,"y":-0.37,"z":1.147,"c":3,"p":0.335,"v":6.5,"u":0.231,"t":"POR","s":-0.014,"ns":3},{"n":"Shai Gilgeous-Alexander","x":-6.68,"y":-2.477,"z":2.663,"c":3,"p":0.356,"v":4.5,"u":0.639,"t":"OKC","s":0.0178,"ns":6},{"n":"Shake Milton","x":-1.129,"y":-1.024,"z":-0.882,"c":1,"p":0.35,"v":5.0,"u":0.197,"t":"PHI","s":-0.0023,"ns":1},{"n":"Shane Battier","x":3.878,"y":-3.698,"z":-1.592,"c":4,"p":0.348,"v":5.2,"u":0.041,"t":"MIA","s":0.0011,"ns":1},{"n":"Shawne Williams","x":3.62,"y":-0.612,"z":-1.081,"c":4,"p":0.364,"v":5.7,"u":0.016,"t":"DET","s":0.0009,"ns":1},{"n":"Shelvin Mack","x":-1.35,"y":-1.908,"z":-0.409,"c":1,"p":0.326,"v":4.4,"u":0.306,"t":"ATL","s":-0.0073,"ns":1},{"n":"Simone Fontecchio","x":1.803,"y":1.65,"z":-0.726,"c":2,"p":0.353,"v":7.6,"u":0.023,"t":"DET","s":-0.0133,"ns":3},{"n":"Solomon Hill","x":3.176,"y":-0.824,"z":0.121,"c":4,"p":0.342,"v":4.5,"u":0.027,"t":"ATL","s":-0.0118,"ns":4},{"n":"Spencer Dinwiddie","x":-4.857,"y":-1.039,"z":-0.565,"c":3,"p":0.335,"v":6.4,"u":0.412,"t":"DAL","s":-0.0119,"ns":7},{"n":"Spencer Hawes","x":4.137,"y":-0.313,"z":2.102,"c":4,"p":0.364,"v":4.7,"u":0.004,"t":"LAC","s":0.0041,"ns":2},{"n":"Stanley Johnson","x":1.932,"y":-1.743,"z":-0.601,"c":4,"p":0.294,"v":5.1,"u":0.069,"t":"NOP","s":-0.0374,"ns":3},{"n":"Stephen Curry","x":-4.62,"y":2.816,"z":0.456,"c":3,"p":0.42,"v":11.4,"u":0.398,"t":"GSW","s":0.0439,"ns":11},{"n":"Stephon Castle","x":-0.14,"y":-1.2,"z":1.725,"c":1,"p":0.285,"v":5.5,"u":0.211,"t":"SAS","s":-0.0235,"ns":1},{"n":"Sterling Brown","x":1.265,"y":1.734,"z":0.111,"c":2,"p":0.422,"v":6.2,"u":0.088,"t":"HOU","s":0.0177,"ns":1},{"n":"Steve Blake","x":0.132,"y":-2.62,"z":-1.233,"c":1,"p":0.364,"v":5.1,"u":0.193,"t":"POR","s":0.0096,"ns":2},{"n":"Svi Mykhailiuk","x":-1.118,"y":1.806,"z":-1.315,"c":2,"p":0.362,"v":8.7,"u":0.13,"t":"UTA","s":-0.0079,"ns":3},{"n":"T.J. Warren","x":1.847,"y":-0.529,"z":-0.846,"c":4,"p":0.416,"v":4.2,"u":0.102,"t":"IND","s":0.0282,"ns":2},{"n":"Talen Horton-Tucker","x":-1.209,"y":-1.91,"z":1.588,"c":1,"p":0.295,"v":5.4,"u":0.209,"t":"UTA","s":-0.0329,"ns":3},{"n":"Tari Eason","x":3.816,"y":-1.635,"z":0.832,"c":4,"p":0.342,"v":4.1,"u":0.016,"t":"HOU","s":-0.0061,"ns":2},{"n":"Taurean Prince","x":1.006,"y":1.215,"z":-0.098,"c":2,"p":0.385,"v":6.6,"u":0.079,"t":"MIL","s":0.0108,"ns":7},{"n":"Terance Mann","x":1.441,"y":-2.212,"z":0.656,"c":1,"p":0.369,"v":3.6,"u":0.11,"t":"LAC","s":0.0112,"ns":3},{"n":"Terence Davis","x":-0.059,"y":1.301,"z":-0.366,"c":2,"p":0.375,"v":8.8,"u":0.116,"t":"SAC","s":0.0025,"ns":3},{"n":"Terrance Ferguson","x":3.722,"y":0.701,"z":0.19,"c":4,"p":0.328,"v":5.1,"u":0.01,"t":"OKC","s":-0.0217,"ns":2},{"n":"Terrence Ross","x":-0.687,"y":2.08,"z":-2.121,"c":2,"p":0.361,"v":7.4,"u":0.131,"t":"PHX","s":-0.011,"ns":9},{"n":"Terry Rozier","x":-2.234,"y":-0.064,"z":-0.814,"c":1,"p":0.356,"v":7.2,"u":0.241,"t":"MIA","s":-0.0038,"ns":9},{"n":"Thaddeus Young","x":3.097,"y":-0.585,"z":1.329,"c":4,"p":0.327,"v":3.8,"u":0.064,"t":"CHI","s":-0.0188,"ns":3},{"n":"Theo Maledon","x":-0.647,"y":-0.197,"z":1.506,"c":1,"p":0.334,"v":6.3,"u":0.219,"t":"OKC","s":-0.0079,"ns":1},{"n":"Tidjane Sala\u00fcn","x":0.383,"y":-0.817,"z":0.494,"c":1,"p":0.283,"v":5.9,"u":0.121,"t":"CHA","s":-0.0269,"ns":1},{"n":"Tim Hardaway Jr.","x":-0.591,"y":1.229,"z":-1.094,"c":2,"p":0.359,"v":8.3,"u":0.156,"t":"DET","s":-0.0089,"ns":11},{"n":"Timothe Luwawu-Cabarrot","x":3.345,"y":1.226,"z":0.955,"c":4,"p":0.314,"v":8.2,"u":0.013,"t":"BKN","s":-0.0201,"ns":1},{"n":"Tobias Harris","x":1.785,"y":-0.561,"z":0.009,"c":4,"p":0.369,"v":4.3,"u":0.094,"t":"DET","s":0.0085,"ns":11},{"n":"Tomas Satoransky","x":2.506,"y":-0.901,"z":1.17,"c":4,"p":0.322,"v":3.8,"u":0.094,"t":"CHI","s":-0.0122,"ns":1},{"n":"Toney Douglas","x":-2.924,"y":-0.762,"z":2.247,"c":3,"p":0.399,"v":5.8,"u":0.321,"t":"NOP","s":0.0172,"ns":1},{"n":"Tony Snell","x":2.682,"y":0.344,"z":-0.622,"c":4,"p":0.382,"v":5.2,"u":0.041,"t":"DET","s":0.0139,"ns":6},{"n":"Tony Wroten","x":-1.996,"y":-2.676,"z":-0.193,"c":1,"p":0.214,"v":3.8,"u":0.35,"t":"PHI","s":-0.0456,"ns":1},{"n":"Torrey Craig","x":3.174,"y":-0.455,"z":-0.517,"c":4,"p":0.349,"v":4.8,"u":0.038,"t":"PHX","s":-0.0085,"ns":3},{"n":"Toumani Camara","x":3.91,"y":-0.761,"z":1.261,"c":4,"p":0.354,"v":4.3,"u":0.022,"t":"POR","s":-0.0025,"ns":2},{"n":"Trae Young","x":-7.17,"y":-0.352,"z":3.92,"c":3,"p":0.351,"v":7.9,"u":0.688,"t":"ATL","s":0.0076,"ns":7},{"n":"Tre Jones","x":1.784,"y":-2.039,"z":0.751,"c":4,"p":0.339,"v":3.2,"u":0.094,"t":"SAS","s":-0.0041,"ns":1},{"n":"Tre Mann","x":-3.324,"y":-0.824,"z":3.485,"c":3,"p":0.338,"v":7.5,"u":0.366,"t":"OKC","s":-0.0055,"ns":2},{"n":"Trevor Ariza","x":1.625,"y":1.795,"z":-0.733,"c":2,"p":0.364,"v":6.4,"u":0.059,"t":"POR","s":-0.0083,"ns":7},{"n":"Trey Burke","x":0.194,"y":-2.023,"z":-2.267,"c":1,"p":0.337,"v":6.2,"u":0.113,"t":"DAL","s":-0.0112,"ns":4},{"n":"Trey Lyles","x":3.197,"y":0.281,"z":0.955,"c":4,"p":0.344,"v":6.0,"u":0.016,"t":"SAC","s":-0.0158,"ns":8},{"n":"Trey Murphy III","x":1.552,"y":1.184,"z":1.013,"c":2,"p":0.382,"v":8.2,"u":0.082,"t":"NOP","s":0.0096,"ns":4},{"n":"Tristan da Silva","x":2.328,"y":-1.408,"z":0.383,"c":4,"p":0.335,"v":5.3,"u":0.05,"t":"ORL","s":-0.0077,"ns":1},{"n":"Troy Brown Jr.","x":2.068,"y":-0.743,"z":0.206,"c":4,"p":0.361,"v":4.5,"u":0.04,"t":"LAL","s":0.0012,"ns":2},{"n":"Troy Daniels","x":-0.287,"y":2.529,"z":-0.837,"c":2,"p":0.39,"v":10.1,"u":0.128,"t":"PHX","s":0.0075,"ns":3},{"n":"Ty Jerome","x":-1.422,"y":0.314,"z":0.985,"c":1,"p":0.384,"v":7.5,"u":0.249,"t":"CLE","s":0.0158,"ns":3},{"n":"Ty Lawson","x":-2.617,"y":-1.467,"z":-0.313,"c":1,"p":0.349,"v":3.0,"u":0.388,"t":"DEN","s":0.0012,"ns":2},{"n":"Tyler Dorsey","x":-0.315,"y":0.853,"z":1.05,"c":2,"p":0.36,"v":7.4,"u":0.181,"t":"ATL","s":-0.0013,"ns":1},{"n":"Tyler Herro","x":-3.46,"y":0.961,"z":-0.287,"c":3,"p":0.384,"v":7.7,"u":0.252,"t":"MIA","s":0.0149,"ns":6},{"n":"Tyler Johnson","x":2.809,"y":0.447,"z":0.201,"c":4,"p":0.361,"v":5.3,"u":0.046,"t":"PHX","s":-0.002,"ns":3},{"n":"Tyreke Evans","x":-3.313,"y":-2.989,"z":-0.153,"c":1,"p":0.353,"v":5.0,"u":0.378,"t":"IND","s":0.0087,"ns":3},{"n":"Tyrese Haliburton","x":-4.746,"y":-0.776,"z":2.79,"c":3,"p":0.395,"v":7.2,"u":0.437,"t":"IND","s":0.0349,"ns":5},{"n":"Tyrese Martin","x":1.227,"y":0.033,"z":-0.588,"c":2,"p":0.351,"v":7.7,"u":0.061,"t":"BKN","s":-0.0048,"ns":1},{"n":"Tyrese Maxey","x":-3.563,"y":-1.352,"z":1.373,"c":1,"p":0.392,"v":6.8,"u":0.368,"t":"PHI","s":0.0304,"ns":4},{"n":"Tyus Jones","x":0.498,"y":-0.401,"z":0.379,"c":1,"p":0.396,"v":5.5,"u":0.176,"t":"PHX","s":0.0256,"ns":4},{"n":"Victor Oladipo","x":-1.662,"y":-0.978,"z":-0.183,"c":1,"p":0.343,"v":5.5,"u":0.295,"t":"MIA","s":-0.0077,"ns":8},{"n":"Victor Wembanyama","x":-1.921,"y":2.894,"z":1.743,"c":2,"p":0.339,"v":8.1,"u":0.172,"t":"SAS","s":-0.0187,"ns":2},{"n":"Vince Carter","x":0.582,"y":0.652,"z":-0.491,"c":2,"p":0.352,"v":7.2,"u":0.125,"t":"ATL","s":-0.0109,"ns":6},{"n":"Vince Williams Jr.","x":1.894,"y":-1.251,"z":-0.502,"c":4,"p":0.378,"v":5.2,"u":0.076,"t":"MEM","s":0.0074,"ns":1},{"n":"V\u00edt Krej\u010d\u00ed","x":0.468,"y":1.888,"z":-0.037,"c":2,"p":0.437,"v":6.4,"u":0.078,"t":"ATL","s":0.0225,"ns":1},{"n":"Wayne Ellington","x":-0.181,"y":1.248,"z":-1.585,"c":2,"p":0.383,"v":8.6,"u":0.107,"t":"LAL","s":0.008,"ns":7},{"n":"Wayne Selden","x":0.936,"y":-0.689,"z":0.286,"c":1,"p":0.314,"v":4.4,"u":0.127,"t":"CHI","s":-0.0156,"ns":1},{"n":"Wendell Carter Jr.","x":4.058,"y":0.272,"z":1.829,"c":4,"p":0.351,"v":4.4,"u":0.009,"t":"ORL","s":-0.0064,"ns":3},{"n":"Wesley Johnson","x":2.341,"y":0.237,"z":-1.09,"c":4,"p":0.349,"v":4.9,"u":0.057,"t":"LAC","s":-0.0118,"ns":4},{"n":"Wesley Matthews","x":1.11,"y":0.122,"z":-0.678,"c":2,"p":0.37,"v":6.9,"u":0.094,"t":"LAL","s":0.0052,"ns":8},{"n":"Will Barton","x":-2.043,"y":0.208,"z":0.026,"c":1,"p":0.365,"v":5.7,"u":0.248,"t":"TOR","s":0.0037,"ns":8},{"n":"Wilson Chandler","x":1.064,"y":1.501,"z":-1.55,"c":2,"p":0.347,"v":5.4,"u":0.059,"t":"DEN","s":-0.0169,"ns":4},{"n":"Yogi Ferrell","x":-2.432,"y":-0.559,"z":-0.191,"c":1,"p":0.38,"v":5.5,"u":0.348,"t":"DAL","s":0.0137,"ns":2},{"n":"Zaccharie Risacher","x":3.374,"y":1.589,"z":1.485,"c":4,"p":0.355,"v":6.7,"u":0.025,"t":"ATL","s":-0.006,"ns":1},{"n":"Zach Collins","x":4.489,"y":-1.529,"z":2.397,"c":4,"p":0.317,"v":4.2,"u":0.0,"t":"SAS","s":-0.0117,"ns":1},{"n":"Zach LaVine","x":-4.352,"y":-0.341,"z":0.382,"c":3,"p":0.385,"v":6.5,"u":0.378,"t":"SAC","s":0.0253,"ns":10},{"n":"Ziaire Williams","x":2.246,"y":0.185,"z":-0.688,"c":4,"p":0.32,"v":6.7,"u":0.054,"t":"BKN","s":-0.0295,"ns":3}];
+
+const CLUSTERS = {
+  1: { name: 'Secondary Creators', color: '#f7768e', bg: 'rgba(247,118,142,0.15)' },
+  2: { name: 'High-Volume Movement Shooters', color: '#e0af68', bg: 'rgba(224,175,104,0.15)' },
+  3: { name: 'Primary Self-Creators', color: '#7dcfff', bg: 'rgba(125,207,255,0.15)' },
+  4: { name: 'Spot-Up Specialists', color: '#9ece6a', bg: 'rgba(158,206,106,0.15)' }
+};
+
+const NOTABLE = [
+  // Cluster 1: Secondary Creators — Top 10
+  'Darren Collison','George Hill','Jose Calderon','Joe Ingles',
+  'Malcolm Brogdon','Payton Pritchard','Keon Ellis','Alec Burks',
+  'Jalen Brunson','Tyrese Maxey',
+  // Cluster 2: High-Volume Movement Shooters — Top 10
+  'Luke Kennard','Seth Curry','Kyle Korver','Joe Harris',
+  'Grayson Allen','JJ Redick','Anthony Morrow','Karl-Anthony Towns',
+  'Bryn Forbes','Doug McDermott',
+  // Cluster 3: Primary Self-Creators — Top 10
+  'Stephen Curry','Mike Conley','Tyrese Haliburton','Kawhi Leonard',
+  'Chris Paul','Desmond Bane','Darius Garland','D.J. Augustin',
+  'CJ McCollum','Collin Sexton',
+  // Cluster 4: Spot-Up Specialists — Top 10
+  'Mike Miller','Otto Porter Jr.','Rui Hachimura','T.J. Warren',
+  'Sam Hauser','Matthew Dellavedova','Courtney Lee','Georges Niang',
+  'Royce O\'Neale','Josh Green'
+];
+
+// ═══════════════════════════════════════
+// THREE.JS SETUP
+// ═══════════════════════════════════════
+const container = document.getElementById('canvas-container');
+const scene = new THREE.Scene();
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(14, 10, 18);
+camera.lookAt(0, 0, 0);
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setClearColor(0x05060f, 1);
+container.appendChild(renderer.domElement);
+
+// ── DEEP STARFIELD (20k stars, multi-layer) ──
+const starCount = 20000;
+const starGeo = new THREE.BufferGeometry();
+const starPos = new Float32Array(starCount * 3);
+const starSizes = new Float32Array(starCount);
+const starColors = new Float32Array(starCount * 3);
+const starTints = [
+  [0.85, 0.88, 1.0], [1.0, 0.95, 0.85], [1.0, 0.85, 0.7],
+  [0.75, 0.82, 1.0], [1.0, 0.92, 0.92], [0.9, 0.9, 1.0],
+];
+for (let i = 0; i < starCount; i++) {
+  const r = 40 + Math.random() * 110;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  starPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+  starPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+  starPos[i*3+2] = r * Math.cos(phi);
+  // Power distribution: most small, some medium, few large
+  const rng = Math.random();
+  starSizes[i] = rng < 0.7 ? 0.06 + Math.random() * 0.15
+               : rng < 0.92 ? 0.2 + Math.random() * 0.35
+               : 0.5 + Math.random() * 0.6;
+  const tint = starTints[Math.floor(Math.random() * starTints.length)];
+  const bright = 0.4 + Math.random() * 0.6;
+  starColors[i*3]   = tint[0] * bright;
+  starColors[i*3+1] = tint[1] * bright;
+  starColors[i*3+2] = tint[2] * bright;
+}
+starGeo.setAttribute('position', new THREE.BufferAttribute(starPos, 3));
+starGeo.setAttribute('size', new THREE.BufferAttribute(starSizes, 1));
+starGeo.setAttribute('color', new THREE.BufferAttribute(starColors, 3));
+const starMat = new THREE.ShaderMaterial({
+  uniforms: { uPixelRatio: { value: renderer.getPixelRatio() }, uTime: { value: 0 } },
+  vertexShader: `
+    attribute float size;
+    varying vec3 vColor;
+    varying float vTwinkle;
+    uniform float uPixelRatio;
+    uniform float uTime;
+    void main() {
+      vColor = color;
+      float twinkle = sin(uTime * (0.8 + position.x * 0.008) + position.y * 0.4 + position.z * 0.3) * 0.25 + 0.75;
+      vTwinkle = twinkle;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * uPixelRatio * (14.0 / -mvPosition.z) * twinkle;
+      gl_PointSize = max(gl_PointSize, 0.8);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    varying float vTwinkle;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float core = 1.0 - smoothstep(0.0, 0.18, d);
+      float glow = 1.0 - smoothstep(0.0, 0.5, d);
+      vec3 col = vColor * glow * 0.5 + vec3(1.0) * core * 0.9;
+      gl_FragColor = vec4(col, glow * 0.8 * vTwinkle);
+    }
+  `,
+  transparent: true, vertexColors: true, depthWrite: false, blending: THREE.AdditiveBlending
+});
+const starField = new THREE.Points(starGeo, starMat);
+scene.add(starField);
+
+// ── BRIGHT ACCENT STARS (diffraction spikes) ──
+const brightCount = 100;
+const brightGeo = new THREE.BufferGeometry();
+const brightPos = new Float32Array(brightCount * 3);
+const brightSizes = new Float32Array(brightCount);
+const brightCol = new Float32Array(brightCount * 3);
+for (let i = 0; i < brightCount; i++) {
+  const r = 45 + Math.random() * 80;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  brightPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+  brightPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+  brightPos[i*3+2] = r * Math.cos(phi);
+  brightSizes[i] = 0.8 + Math.random() * 2.0;
+  const hue = Math.random();
+  const c = new THREE.Color().setHSL(hue < 0.3 ? 0.6 : hue < 0.5 ? 0.08 : hue < 0.7 ? 0.55 : 0.12, 0.35, 0.85);
+  brightCol[i*3] = c.r; brightCol[i*3+1] = c.g; brightCol[i*3+2] = c.b;
+}
+brightGeo.setAttribute('position', new THREE.BufferAttribute(brightPos, 3));
+brightGeo.setAttribute('size', new THREE.BufferAttribute(brightSizes, 1));
+brightGeo.setAttribute('color', new THREE.BufferAttribute(brightCol, 3));
+const brightMat = new THREE.ShaderMaterial({
+  uniforms: { uPixelRatio: { value: renderer.getPixelRatio() } },
+  vertexShader: `
+    attribute float size;
+    varying vec3 vColor;
+    uniform float uPixelRatio;
+    void main() {
+      vColor = color;
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * uPixelRatio * (20.0 / -mvPosition.z);
+      gl_PointSize = max(gl_PointSize, 2.0);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float spike = max(
+        exp(-abs(gl_PointCoord.x - 0.5) * 12.0) * exp(-abs(gl_PointCoord.y - 0.5) * 60.0),
+        exp(-abs(gl_PointCoord.y - 0.5) * 12.0) * exp(-abs(gl_PointCoord.x - 0.5) * 60.0)
+      );
+      float core = 1.0 - smoothstep(0.0, 0.12, d);
+      float halo = 1.0 - smoothstep(0.0, 0.45, d);
+      vec3 col = vec3(1.0) * core + vColor * halo * 0.6 + vec3(1.0) * spike * 0.4;
+      float alpha = max(core, max(halo * 0.5, spike * 0.6));
+      gl_FragColor = vec4(col, alpha);
+    }
+  `,
+  transparent: true, vertexColors: true, depthWrite: false, blending: THREE.AdditiveBlending
+});
+scene.add(new THREE.Points(brightGeo, brightMat));
+
+// ── COSMIC DUST (smooth color wash, not chunky patches) ──
+// 8000 tiny tinted particles spread uniformly across entire sky sphere
+const dustCount = 8000;
+const dustGeo = new THREE.BufferGeometry();
+const dustPos = new Float32Array(dustCount * 3);
+const dustCol = new Float32Array(dustCount * 3);
+const dustPalette = [
+  new THREE.Color(0x2a1a4e), new THREE.Color(0x1a2a4e),
+  new THREE.Color(0x4e1a2a), new THREE.Color(0x1a3a3e),
+  new THREE.Color(0x2e1a3e), new THREE.Color(0x1a2e4e),
+  new THREE.Color(0x3a2a1a), new THREE.Color(0x1a3a2a),
+];
+for (let i = 0; i < dustCount; i++) {
+  // Uniform sphere distribution with slight radial variation
+  const r = 48 + Math.random() * 55;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  dustPos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+  dustPos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+  dustPos[i*3+2] = r * Math.cos(phi);
+  // Smoothly blend between palette colors using position
+  const angle = Math.atan2(dustPos[i*3+1], dustPos[i*3]) / (Math.PI * 2) + 0.5;
+  const elevation = dustPos[i*3+2] / r * 0.5 + 0.5;
+  const ci = Math.floor((angle * 4 + elevation * 2) % dustPalette.length);
+  const c = dustPalette[ci];
+  dustCol[i*3] = c.r; dustCol[i*3+1] = c.g; dustCol[i*3+2] = c.b;
+}
+dustGeo.setAttribute('position', new THREE.BufferAttribute(dustPos, 3));
+dustGeo.setAttribute('color', new THREE.BufferAttribute(dustCol, 3));
+const dustMat = new THREE.PointsMaterial({
+  size: 1.8, transparent: true, opacity: 0.04,
+  vertexColors: true, sizeAttenuation: true,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+scene.add(new THREE.Points(dustGeo, dustMat));
+
+// Second dust layer - slightly different radius for depth
+const dust2Geo = new THREE.BufferGeometry();
+const dust2Pos = new Float32Array(dustCount * 3);
+const dust2Col = new Float32Array(dustCount * 3);
+for (let i = 0; i < dustCount; i++) {
+  const r = 60 + Math.random() * 50;
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  dust2Pos[i*3]   = r * Math.sin(phi) * Math.cos(theta);
+  dust2Pos[i*3+1] = r * Math.sin(phi) * Math.sin(theta);
+  dust2Pos[i*3+2] = r * Math.cos(phi);
+  const ci = Math.floor(Math.random() * dustPalette.length);
+  const c = dustPalette[ci];
+  dust2Col[i*3] = c.r; dust2Col[i*3+1] = c.g; dust2Col[i*3+2] = c.b;
+}
+dust2Geo.setAttribute('position', new THREE.BufferAttribute(dust2Pos, 3));
+dust2Geo.setAttribute('color', new THREE.BufferAttribute(dust2Col, 3));
+const dust2Mat = new THREE.PointsMaterial({
+  size: 2.5, transparent: true, opacity: 0.03,
+  vertexColors: true, sizeAttenuation: true,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+scene.add(new THREE.Points(dust2Geo, dust2Mat));
+
+// ── MOON ──
+const moonGeo = new THREE.SphereGeometry(3.5, 32, 32);
+const moonMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uLightDir: { value: new THREE.Vector3(1, 0.5, 0.3).normalize() }
+  },
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      vPosition = position;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uLightDir;
+    varying vec3 vNormal;
+    varying vec3 vPosition;
+    void main() {
+      float light = dot(vNormal, uLightDir) * 0.5 + 0.5;
+      light = pow(light, 1.5);
+      // Crater-like surface variation
+      float noise = fract(sin(dot(vPosition.xz * 3.0, vec2(12.9898, 78.233))) * 43758.5453);
+      float surface = 0.7 + noise * 0.3;
+      vec3 baseColor = vec3(0.28, 0.27, 0.32);
+      vec3 litColor = vec3(0.55, 0.53, 0.58);
+      vec3 col = mix(baseColor, litColor, light) * surface;
+      // Rim glow
+      float rim = 1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0)));
+      col += vec3(0.15, 0.18, 0.3) * pow(rim, 3.0);
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `
+});
+const moon = new THREE.Mesh(moonGeo, moonMat);
+moon.position.set(-42, 22, -38);
+scene.add(moon);
+
+// Moon atmosphere glow (sprite)
+const moonGlowGeo = new THREE.SphereGeometry(4.8, 32, 32);
+const moonGlowMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vNormal;
+    void main() {
+      float intensity = pow(0.6 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.5);
+      gl_FragColor = vec4(0.4, 0.5, 0.75, 1.0) * intensity * 0.5;
+    }
+  `,
+  transparent: true, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending
+});
+const moonGlow = new THREE.Mesh(moonGlowGeo, moonGlowMat);
+moonGlow.position.copy(moon.position);
+scene.add(moonGlow);
+
+// ── DISTANT SUN (warm glowing orb) ──
+const sunGeo = new THREE.SphereGeometry(5, 32, 32);
+const sunMat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 } },
+  vertexShader: `
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    void main() {
+      vPosition = position;
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform float uTime;
+    varying vec3 vPosition;
+    varying vec3 vNormal;
+    void main() {
+      float n = fract(sin(dot(vPosition.xy * 2.0 + uTime * 0.1, vec2(12.9898, 78.233))) * 43758.5453);
+      float n2 = fract(sin(dot(vPosition.yz * 1.5 + uTime * 0.07, vec2(63.7264, 10.873))) * 43758.5453);
+      vec3 core = vec3(1.0, 0.85, 0.4);
+      vec3 edge = vec3(1.0, 0.45, 0.15);
+      float rim = 1.0 - max(0.0, dot(vNormal, vec3(0.0, 0.0, 1.0)));
+      vec3 col = mix(core, edge, pow(rim, 1.5));
+      col += vec3(n * 0.1, n2 * 0.05, 0.0);
+      float bright = 0.9 + sin(uTime * 0.5 + vPosition.x * 2.0) * 0.1;
+      gl_FragColor = vec4(col * bright, 1.0);
+    }
+  `
+});
+const sun = new THREE.Mesh(sunGeo, sunMat);
+sun.position.set(50, 30, 45);
+scene.add(sun);
+
+// Sun corona glow
+const coronaGeo = new THREE.SphereGeometry(9, 32, 32);
+const coronaMat = new THREE.ShaderMaterial({
+  vertexShader: `
+    varying vec3 vNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vNormal;
+    void main() {
+      float intensity = pow(0.55 - dot(vNormal, vec3(0.0, 0.0, 1.0)), 2.0);
+      gl_FragColor = vec4(1.0, 0.65, 0.2, 1.0) * intensity * 0.6;
+    }
+  `,
+  transparent: true, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending
+});
+const corona = new THREE.Mesh(coronaGeo, coronaMat);
+corona.position.copy(sun.position);
+scene.add(corona);
+
+// Sun point light (subtle warm ambient)
+const sunLight = new THREE.PointLight(0xffaa44, 0.3, 120);
+sunLight.position.copy(sun.position);
+scene.add(sunLight);
+
+// ── SMALL DISTANT PLANET (ringed) ──
+const planetGeo = new THREE.SphereGeometry(1.5, 24, 24);
+const planetMat = new THREE.MeshBasicMaterial({ color: 0x445577 });
+const planet = new THREE.Mesh(planetGeo, planetMat);
+planet.position.set(35, -25, -55);
+scene.add(planet);
+const ringGeo = new THREE.RingGeometry(2.2, 3.2, 48);
+const ringMat = new THREE.MeshBasicMaterial({
+  color: 0x667799, transparent: true, opacity: 0.25, side: THREE.DoubleSide,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const ring = new THREE.Mesh(ringGeo, ringMat);
+ring.position.copy(planet.position);
+ring.rotation.x = Math.PI * 0.35;
+ring.rotation.y = Math.PI * 0.15;
+scene.add(ring);
+
+// ── ADDITIONAL CELESTIAL BODIES ──
+// Helper: glow shell around any body
+function addGlow(pos, radius, color, intensity) {
+  const g = new THREE.SphereGeometry(radius, 20, 20);
+  const m = new THREE.ShaderMaterial({
+    vertexShader: `
+      varying vec3 vNormal;
+      void main() {
+        vNormal = normalize(normalMatrix * normal);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uIntensity;
+      varying vec3 vNormal;
+      void main() {
+        float i = pow(0.6 - dot(vNormal, vec3(0.0,0.0,1.0)), 2.5);
+        gl_FragColor = vec4(uColor, 1.0) * i * uIntensity;
+      }
+    `,
+    uniforms: { uColor: { value: new THREE.Color(color) }, uIntensity: { value: intensity } },
+    transparent: true, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  const mesh = new THREE.Mesh(g, m);
+  mesh.position.copy(pos);
+  scene.add(mesh);
+}
+
+// Helper: simple shaded sphere
+function addBody(x, y, z, radius, baseColor, litColor, lightDir) {
+  const geo = new THREE.SphereGeometry(radius, 24, 24);
+  const ld = lightDir || new THREE.Vector3(1, 0.5, 0.3).normalize();
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uBase: { value: new THREE.Color(baseColor) }, uLit: { value: new THREE.Color(litColor) }, uLight: { value: ld } },
+    vertexShader: `
+      varying vec3 vNormal; varying vec3 vPos;
+      void main() { vNormal = normalize(normalMatrix * normal); vPos = position; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+    `,
+    fragmentShader: `
+      uniform vec3 uBase, uLit, uLight; varying vec3 vNormal; varying vec3 vPos;
+      void main() {
+        float l = dot(vNormal, uLight)*0.5+0.5; l = pow(l,1.4);
+        float n = fract(sin(dot(vPos.xz*3.0,vec2(12.9898,78.233)))*43758.5453);
+        vec3 col = mix(uBase, uLit, l) * (0.75+n*0.25);
+        float rim = 1.0 - max(0.0, dot(vNormal, vec3(0,0,1)));
+        col += uLit * pow(rim,3.0) * 0.15;
+        gl_FragColor = vec4(col,1.0);
+      }
+    `
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  return mesh.position;
+}
+
+// Helper: ringed planet
+function addRingedPlanet(x, y, z, radius, bodyColor, ringColor, ringTilt) {
+  const pos = addBody(x, y, z, radius, bodyColor, bodyColor, new THREE.Vector3(0.8, 0.4, -0.3).normalize());
+  const rg = new THREE.RingGeometry(radius * 1.5, radius * 2.3, 48);
+  const rm = new THREE.MeshBasicMaterial({
+    color: ringColor, transparent: true, opacity: 0.2, side: THREE.DoubleSide,
+    blending: THREE.AdditiveBlending, depthWrite: false
+  });
+  const rMesh = new THREE.Mesh(rg, rm);
+  rMesh.position.set(x, y, z);
+  rMesh.rotation.x = ringTilt || Math.PI * 0.3;
+  rMesh.rotation.y = Math.random() * Math.PI;
+  scene.add(rMesh);
+  return pos;
+}
+
+// Helper: small glowing sun/star
+function addStar(x, y, z, radius, coreColor, glowColor, glowRadius) {
+  const geo = new THREE.SphereGeometry(radius, 20, 20);
+  const mat = new THREE.MeshBasicMaterial({ color: coreColor });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(x, y, z);
+  scene.add(mesh);
+  addGlow(mesh.position, glowRadius || radius * 1.8, glowColor, 0.5);
+}
+
+// --- Scattered moons (small, grey/brown, various distances) ---
+addBody(-65, 10, 30, 1.2, 0x2a2830, 0x504850);
+addBody(20, 50, -60, 0.8, 0x33302e, 0x5a5550);
+addBody(-30, -55, -35, 1.5, 0x2e2a30, 0x555060);
+addBody(55, 5, 65, 0.6, 0x353030, 0x605858);
+addBody(-15, 65, 50, 1.0, 0x302e33, 0x585260);
+addBody(70, -40, 15, 0.7, 0x2a2a2e, 0x4a4850);
+
+// --- Colorful planets ---
+// Mars-like (reddish, close-ish)
+const marsPos = addBody(-50, -20, 55, 2.0, 0x5a2a1a, 0x9a5535);
+addGlow(marsPos, 2.8, 0x8a4020, 0.25);
+
+// Ice world (blue-white, far)
+const icePos = addBody(60, 40, -45, 1.8, 0x1a2a3a, 0x5580aa);
+addGlow(icePos, 2.6, 0x3366aa, 0.3);
+
+// Gas giant (banded, large, distant)
+const gasPos = addBody(-55, 35, -65, 3.5, 0x3a3020, 0x7a6840, new THREE.Vector3(-0.5, 0.8, 0.2).normalize());
+addGlow(gasPos, 5.0, 0x5a4a20, 0.2);
+
+// Purple world
+const purplePos = addBody(45, -50, 50, 1.3, 0x2a1a3a, 0x6a4088);
+addGlow(purplePos, 1.9, 0x5530aa, 0.3);
+
+// Emerald planet (far)
+addBody(-70, -10, -70, 1.0, 0x1a2a1a, 0x3a6a40);
+
+// Dusty orange (very far, tiny)
+addBody(80, 25, -30, 0.5, 0x4a2a10, 0x8a5520);
+
+// --- More ringed planets ---
+addRingedPlanet(-40, -45, -60, 2.0, 0x3a3a50, 0x6677aa, Math.PI * 0.25);
+addRingedPlanet(65, 30, 30, 1.2, 0x4a3a2a, 0x887755, Math.PI * 0.4);
+
+// --- Small distant suns/stars (warm and cool) ---
+addStar(75, 55, -55, 1.5, 0xffcc66, 0xffaa33, 3.0);
+addStar(-80, -35, 40, 1.0, 0x88aaff, 0x5588ee, 2.2);
+addStar(-20, -65, -70, 0.8, 0xffddaa, 0xff8844, 1.8);
+addStar(50, -60, -40, 1.2, 0xaaccff, 0x6699dd, 2.5);
+addStar(-60, 55, -20, 0.6, 0xffe0b0, 0xffaa55, 1.4);
+
+// --- Tiny far-away bodies (just dots of interest at edges) ---
+[[-90,20,50], [85,-15,-65], [-45,75,35], [40,-70,-55], [-75,-50,-45],
+ [60,65,45], [-55,-60,60], [90,10,25], [-30,80,-40], [70,-55,55]].forEach(p => {
+  const s = 0.3 + Math.random() * 0.5;
+  const hue = Math.random();
+  const color = new THREE.Color().setHSL(hue, 0.2 + Math.random() * 0.3, 0.3 + Math.random() * 0.3);
+  const geo = new THREE.SphereGeometry(s, 12, 12);
+  const mat = new THREE.MeshBasicMaterial({ color });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.position.set(p[0], p[1], p[2]);
+  scene.add(mesh);
+});
+
+// ── GRID PLANES ──
+function addGridPlane(rotation, color) {
+  const grid = new THREE.GridHelper(30, 30, color, color);
+  grid.material.transparent = true;
+  grid.material.opacity = 0.04;
+  if (rotation) {
+    grid.rotation.x = rotation.x || 0;
+    grid.rotation.z = rotation.z || 0;
+  }
+  scene.add(grid);
+}
+addGridPlane(null, 0x3d4466);
+
+// ── PLAYER POINTS (7 dimensions) ──
+// x,y,z = PC1-3 | color = cluster | size = volume | opacity = skill | pulse = self-creation
+const pointGeo = new THREE.BufferGeometry();
+const positions = new Float32Array(DATA.length * 3);
+const colors = new Float32Array(DATA.length * 3);
+const sizes = new Float32Array(DATA.length);
+const opacities = new Float32Array(DATA.length);
+const pulses = new Float32Array(DATA.length);
+
+const volMin = 2.4, volMax = 11.4;
+const sizeMin = 4, sizeMax = 22;
+const skillMin = -0.053, skillMax = 0.055;
+const unastMin = 0.0, unastMax = 0.704;
+
+DATA.forEach((p, i) => {
+  positions[i*3]   = p.x;
+  positions[i*3+1] = p.y;
+  positions[i*3+2] = p.z;
+
+  const col = new THREE.Color(CLUSTERS[p.c].color);
+  colors[i*3]   = col.r;
+  colors[i*3+1] = col.g;
+  colors[i*3+2] = col.b;
+
+  const t = (p.v - volMin) / (volMax - volMin);
+  sizes[i] = sizeMin + t * (sizeMax - sizeMin);
+
+  // Dim 6: Opacity from skill (HLM) — elite glows bright, poor fades
+  const sNorm = (p.s - skillMin) / (skillMax - skillMin);
+  opacities[i] = 0.12 + Math.pow(Math.max(0, Math.min(1, sNorm)), 0.7) * 0.88;
+
+  // Dim 7: Pulse speed from self-creation rate — high = fast throb
+  const uNorm = Math.max(0, Math.min(1, (p.u - unastMin) / (unastMax - unastMin)));
+  pulses[i] = uNorm;
+});
+
+pointGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+pointGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+pointGeo.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+pointGeo.setAttribute('aOpacity', new THREE.BufferAttribute(opacities, 1));
+pointGeo.setAttribute('aPulse', new THREE.BufferAttribute(pulses, 1));
+
+const pointMat = new THREE.ShaderMaterial({
+  uniforms: {
+    uPixelRatio: { value: renderer.getPixelRatio() },
+    uTime: { value: 0.0 }
+  },
+  vertexShader: `
+    attribute float size;
+    attribute float aOpacity;
+    attribute float aPulse;
+    varying vec3 vColor;
+    varying float vOpacity;
+    varying float vPulsePhase;
+    uniform float uPixelRatio;
+    uniform float uTime;
+    void main() {
+      vColor = color;
+      vOpacity = aOpacity;
+      // Pulse: frequency 1.5-4.5 Hz scaled by self-creation, amplitude ±35% at max
+      float speed = 1.5 + aPulse * 3.0;
+      float amp = aPulse * 0.35;
+      float pulse = 1.0 + sin(uTime * speed * 6.2832) * amp;
+      vPulsePhase = 0.5 + 0.5 * sin(uTime * speed * 6.2832);
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * pulse * uPixelRatio * (8.0 / -mvPosition.z);
+      gl_PointSize = max(gl_PointSize, 1.5);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    varying vec3 vColor;
+    varying float vOpacity;
+    varying float vPulsePhase;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float glow = 1.0 - smoothstep(0.0, 0.5, d);
+      float core = 1.0 - smoothstep(0.0, 0.2, d);
+      // Pulse also brightens the core on the up-phase
+      float coreBright = 0.5 + vPulsePhase * 0.3;
+      vec3 col = vColor * glow * 0.6 + vec3(1.0) * core * coreBright + vColor * core * 0.5;
+      float alpha = glow * vOpacity;
+      gl_FragColor = vec4(col, alpha);
+    }
+  `,
+  transparent: true,
+  vertexColors: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+
+const points = new THREE.Points(pointGeo, pointMat);
+scene.add(points);
+
+// ── HIGHLIGHT RING ──
+const highlightGeo = new THREE.BufferGeometry();
+highlightGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3));
+highlightGeo.setAttribute('size', new THREE.BufferAttribute(new Float32Array([40]), 1));
+const highlightMat = new THREE.ShaderMaterial({
+  uniforms: { uPixelRatio: { value: renderer.getPixelRatio() }, uColor: { value: new THREE.Color('#ffffff') } },
+  vertexShader: `
+    attribute float size;
+    uniform float uPixelRatio;
+    void main() {
+      vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+      gl_PointSize = size * uPixelRatio * (8.0 / -mvPosition.z);
+      gl_PointSize = max(gl_PointSize, 6.0);
+      gl_Position = projectionMatrix * mvPosition;
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 uColor;
+    void main() {
+      float d = length(gl_PointCoord - vec2(0.5));
+      if (d > 0.5) discard;
+      float ring = smoothstep(0.35, 0.42, d) * (1.0 - smoothstep(0.45, 0.5, d));
+      float glow = (1.0 - smoothstep(0.3, 0.5, d)) * 0.15;
+      float alpha = ring + glow;
+      gl_FragColor = vec4(uColor, alpha);
+    }
+  `,
+  transparent: true,
+  depthWrite: false,
+  blending: THREE.AdditiveBlending
+});
+const highlightPoint = new THREE.Points(highlightGeo, highlightMat);
+highlightPoint.visible = false;
+scene.add(highlightPoint);
+
+// ── LABELS (CSS2D-like via HTML overlay) ──
+const labelContainer = document.createElement('div');
+labelContainer.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:5;overflow:hidden;';
+document.body.appendChild(labelContainer);
+
+const labels = [];
+const notableSet = new Set(NOTABLE);
+
+DATA.forEach((p, i) => {
+  if (!notableSet.has(p.n)) return;
+  const div = document.createElement('div');
+  div.style.cssText = `
+    position:absolute;
+    font-family:'Space Mono',monospace;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:0.4px;
+    color:${CLUSTERS[p.c].color};
+    text-shadow: 0 0 6px ${CLUSTERS[p.c].color}44, 0 1px 3px rgba(0,0,0,0.9);
+    background: rgba(5,6,15,0.45);
+    padding: 1px 4px;
+    border-radius: 3px;
+    white-space:nowrap;
+    transform:translate(-50%, -100%);
+    padding-bottom:5px;
+  `;
+  div.textContent = p.n;
+  labelContainer.appendChild(div);
+  labels.push({ el: div, idx: i, pos: new THREE.Vector3(p.x, p.y, p.z) });
+});
+
+function updateLabels() {
+  const w2 = window.innerWidth / 2;
+  const h2 = window.innerHeight / 2;
+  labels.forEach(l => {
+    const p = l.pos.clone().project(camera);
+    if (p.z > 1) { l.el.style.display = 'none'; return; }
+    l.el.style.display = '';
+    l.el.style.left = (p.x * w2 + w2) + 'px';
+    l.el.style.top = (-p.y * h2 + h2) + 'px';
+
+    // Check if cluster is hidden
+    const player = DATA[l.idx];
+    if (!clusterVisible[player.c]) { l.el.style.display = 'none'; }
+  });
+}
+
+// ═══════════════════════════════════════
+// ORBIT CONTROLS (minimal impl)
+// ═══════════════════════════════════════
+let spherical = new THREE.Spherical().setFromVector3(camera.position);
+let targetSpherical = { phi: spherical.phi, theta: spherical.theta, radius: spherical.radius };
+let isDragging = false;
+let prevMouse = { x: 0, y: 0 };
+let autoRotate = true;
+
+renderer.domElement.addEventListener('mousedown', (e) => {
+  isDragging = true;
+  autoRotate = false;
+  prevMouse = { x: e.clientX, y: e.clientY };
+});
+window.addEventListener('mouseup', () => { isDragging = false; });
+window.addEventListener('mousemove', (e) => {
+  if (!isDragging) return;
+  const dx = e.clientX - prevMouse.x;
+  const dy = e.clientY - prevMouse.y;
+  targetSpherical.theta -= dx * 0.005;
+  targetSpherical.phi = Math.max(0.2, Math.min(Math.PI - 0.2, targetSpherical.phi - dy * 0.005));
+  prevMouse = { x: e.clientX, y: e.clientY };
+});
+renderer.domElement.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  targetSpherical.radius = Math.max(8, Math.min(50, targetSpherical.radius + e.deltaY * 0.02));
+}, { passive: false });
+
+// Touch support
+let touchDist = 0;
+renderer.domElement.addEventListener('touchstart', (e) => {
+  if (e.touches.length === 1) {
+    isDragging = true;
+    autoRotate = false;
+    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  if (e.touches.length === 2) {
+    touchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+  }
+});
+renderer.domElement.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (e.touches.length === 1 && isDragging) {
+    const dx = e.touches[0].clientX - prevMouse.x;
+    const dy = e.touches[0].clientY - prevMouse.y;
+    targetSpherical.theta -= dx * 0.005;
+    targetSpherical.phi = Math.max(0.2, Math.min(Math.PI - 0.2, targetSpherical.phi - dy * 0.005));
+    prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  }
+  if (e.touches.length === 2) {
+    const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+    targetSpherical.radius = Math.max(8, Math.min(50, targetSpherical.radius - (d - touchDist) * 0.05));
+    touchDist = d;
+  }
+}, { passive: false });
+renderer.domElement.addEventListener('touchend', () => { isDragging = false; });
+
+// ═══════════════════════════════════════
+// RAYCASTING / HOVER
+// ═══════════════════════════════════════
+const raycaster = new THREE.Raycaster();
+raycaster.params.Points.threshold = 0.4;
+const mouse = new THREE.Vector2(-999, -999);
+let hoveredIdx = -1;
+
+renderer.domElement.addEventListener('mousemove', (e) => {
+  mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+});
+
+const tooltip = document.getElementById('tooltip');
+
+function updateHover(e) {
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObject(points);
+
+  if (intersects.length > 0) {
+    // Find closest visible point
+    let found = -1;
+    for (const hit of intersects) {
+      const idx = hit.index;
+      if (clusterVisible[DATA[idx].c]) { found = idx; break; }
+    }
+    if (found >= 0 && found !== hoveredIdx) {
+      hoveredIdx = found;
+      showTooltip(found);
+    } else if (found < 0) {
+      hideTooltip();
+    }
+  } else {
+    hideTooltip();
+  }
+}
+
+function showTooltip(idx) {
+  const p = DATA[idx];
+  const cl = CLUSTERS[p.c];
+  document.getElementById('ttName').textContent = p.n;
+  document.getElementById('ttName').style.color = cl.color;
+  document.getElementById('ttTeam').textContent = p.t + ' · ' + p.ns + ' season' + (p.ns > 1 ? 's' : '');
+  const ttCl = document.getElementById('ttCluster');
+  ttCl.textContent = cl.name;
+  ttCl.style.background = cl.bg;
+  ttCl.style.color = cl.color;
+  document.getElementById('ttPct').textContent = (p.p * 100).toFixed(1) + '%';
+  document.getElementById('ttPct').style.color = p.p >= 0.38 ? '#9ece6a' : p.p >= 0.35 ? '#e0af68' : '#f7768e';
+  const skillVal = p.s >= 0 ? '+' + p.s.toFixed(4) : p.s.toFixed(4);
+  document.getElementById('ttSkill').textContent = skillVal;
+  document.getElementById('ttSkill').style.color = p.s >= 0.02 ? '#9ece6a' : p.s >= 0 ? '#7dcfff' : '#f7768e';
+  document.getElementById('ttVol').textContent = p.v.toFixed(1);
+  document.getElementById('ttVol').style.color = '#c0c8de';
+  document.getElementById('ttUnast').textContent = (p.u * 100).toFixed(1) + '%';
+  document.getElementById('ttUnast').style.color = '#c0c8de';
+  tooltip.classList.add('visible');
+
+  highlightPoint.visible = true;
+  const hPos = highlightGeo.attributes.position;
+  hPos.setXYZ(0, p.x, p.y, p.z);
+  hPos.needsUpdate = true;
+  highlightMat.uniforms.uColor.value.set(cl.color);
+}
+
+function hideTooltip() {
+  if (hoveredIdx < 0) return;
+  hoveredIdx = -1;
+  tooltip.classList.remove('visible');
+  highlightPoint.visible = false;
+}
+
+renderer.domElement.addEventListener('mousemove', (e) => {
+  if (tooltip.classList.contains('visible')) {
+    let tx = e.clientX + 16;
+    let ty = e.clientY - 10;
+    if (tx + 240 > window.innerWidth) tx = e.clientX - 240;
+    if (ty + 200 > window.innerHeight) ty = e.clientY - 200;
+    tooltip.style.left = tx + 'px';
+    tooltip.style.top = ty + 'px';
+  }
+});
+
+// ═══════════════════════════════════════
+// CLUSTER FILTERS
+// ═══════════════════════════════════════
+const clusterVisible = { 1: true, 2: true, 3: true, 4: true };
+const filtersEl = document.getElementById('filters');
+
+[1,2,3,4].forEach(c => {
+  const btn = document.createElement('button');
+  btn.className = 'filter-btn active';
+  btn.innerHTML = `<span class="filter-dot" style="background:${CLUSTERS[c].color}"></span>${CLUSTERS[c].name}`;
+  btn.addEventListener('click', () => {
+    clusterVisible[c] = !clusterVisible[c];
+    btn.className = 'filter-btn ' + (clusterVisible[c] ? 'active' : 'inactive');
+    updateVisibility();
+  });
+  filtersEl.appendChild(btn);
+});
+
+function updateVisibility() {
+  const colAttr = pointGeo.attributes.color;
+  const sizeAttr = pointGeo.attributes.size;
+  const opAttr = pointGeo.attributes.aOpacity;
+  const pulseAttr = pointGeo.attributes.aPulse;
+  let count = 0;
+  DATA.forEach((p, i) => {
+    const vis = clusterVisible[p.c];
+    if (vis) {
+      const col = new THREE.Color(CLUSTERS[p.c].color);
+      colAttr.setXYZ(i, col.r, col.g, col.b);
+      const t = (p.v - volMin) / (volMax - volMin);
+      sizeAttr.setX(i, sizeMin + t * (sizeMax - sizeMin));
+      const sNorm = (p.s - skillMin) / (skillMax - skillMin);
+      opAttr.setX(i, 0.12 + Math.pow(Math.max(0, Math.min(1, sNorm)), 0.7) * 0.88);
+      const uNorm = Math.max(0, Math.min(1, (p.u - unastMin) / (unastMax - unastMin)));
+      pulseAttr.setX(i, uNorm);
+      count++;
+    } else {
+      colAttr.setXYZ(i, 0, 0, 0);
+      sizeAttr.setX(i, 0);
+      opAttr.setX(i, 0);
+      pulseAttr.setX(i, 0);
+    }
+
+    // Check highlight
+    if (searchHighlightIdx === i && vis) {
+      const col = new THREE.Color('#ffffff');
+      colAttr.setXYZ(i, col.r, col.g, col.b);
+      sizeAttr.setX(i, 40);
+      opAttr.setX(i, 1.0);
+      pulseAttr.setX(i, 0.0);
+    }
+  });
+  colAttr.needsUpdate = true;
+  sizeAttr.needsUpdate = true;
+  opAttr.needsUpdate = true;
+  pulseAttr.needsUpdate = true;
+  document.getElementById('visibleCount').textContent = count;
+}
+
+// ═══════════════════════════════════════
+// SEARCH
+// ═══════════════════════════════════════
+let searchHighlightIdx = -1;
+const searchInput = document.getElementById('search');
+const searchResults = document.getElementById('searchResults');
+
+searchInput.addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase().trim();
+  if (q.length < 2) {
+    searchResults.classList.remove('active');
+    if (searchHighlightIdx >= 0) {
+      searchHighlightIdx = -1;
+      updateVisibility();
+    }
+    return;
+  }
+  const matches = DATA.map((p, i) => ({ ...p, i }))
+    .filter(p => p.n.toLowerCase().includes(q))
+    .slice(0, 10);
+  searchResults.innerHTML = '';
+  if (matches.length > 0) {
+    searchResults.classList.add('active');
+    matches.forEach(m => {
+      const div = document.createElement('div');
+      div.className = 'search-result-item';
+      div.innerHTML = `<span class="dot" style="background:${CLUSTERS[m.c].color}"></span>${m.n}<span class="team">${m.t}</span>`;
+      div.addEventListener('click', () => selectPlayer(m.i));
+      searchResults.appendChild(div);
+    });
+  } else {
+    searchResults.classList.remove('active');
+  }
+});
+
+searchInput.addEventListener('blur', () => {
+  setTimeout(() => searchResults.classList.remove('active'), 200);
+});
+
+function selectPlayer(idx) {
+  searchResults.classList.remove('active');
+  const p = DATA[idx];
+  searchInput.value = p.n;
+
+  searchHighlightIdx = idx;
+  updateVisibility();
+
+  // Fly camera toward player
+  const target = new THREE.Vector3(p.x, p.y, p.z);
+  const dir = target.clone().normalize();
+  const camTarget = target.clone().add(dir.multiplyScalar(6));
+  const s = new THREE.Spherical().setFromVector3(camTarget.length() < 8 ? new THREE.Vector3(p.x + 8, p.y + 5, p.z + 8) : camTarget);
+  targetSpherical.theta = s.theta;
+  targetSpherical.phi = s.phi;
+  targetSpherical.radius = Math.max(12, s.radius);
+  autoRotate = false;
+
+  // Show tooltip-like highlight
+  highlightPoint.visible = true;
+  const hPos = highlightGeo.attributes.position;
+  hPos.setXYZ(0, p.x, p.y, p.z);
+  hPos.needsUpdate = true;
+  highlightMat.uniforms.uColor.value.set(CLUSTERS[p.c].color);
+
+  // Find 4 nearest neighbors and open panel
+  const neighbors = findNeighbors(idx, 4);
+  drawConnectionLines(idx, neighbors);
+  openPlayerPanel(idx, neighbors);
+}
+
+// ═══════════════════════════════════════
+// CLICK TO SELECT
+// ═══════════════════════════════════════
+let clickStart = { x: 0, y: 0, time: 0 };
+renderer.domElement.addEventListener('mousedown', (e) => {
+  clickStart = { x: e.clientX, y: e.clientY, time: Date.now() };
+});
+renderer.domElement.addEventListener('mouseup', (e) => {
+  const dx = e.clientX - clickStart.x;
+  const dy = e.clientY - clickStart.y;
+  const dt = Date.now() - clickStart.time;
+  // Only count as click if didn't drag far or long
+  if (Math.abs(dx) < 6 && Math.abs(dy) < 6 && dt < 300) {
+    const clickMouse = new THREE.Vector2(
+      (e.clientX / window.innerWidth) * 2 - 1,
+      -(e.clientY / window.innerHeight) * 2 + 1
+    );
+    const rc = new THREE.Raycaster();
+    rc.params.Points.threshold = 0.5;
+    rc.setFromCamera(clickMouse, camera);
+    const hits = rc.intersectObject(points);
+    for (const hit of hits) {
+      if (clusterVisible[DATA[hit.index].c]) {
+        selectPlayer(hit.index);
+        return;
+      }
+    }
+  }
+});
+
+// ═══════════════════════════════════════
+// KNN + CONNECTION LINES
+// ═══════════════════════════════════════
+function findNeighbors(idx, k) {
+  const p = DATA[idx];
+  const dists = DATA.map((q, i) => ({
+    i,
+    d: Math.sqrt((p.x-q.x)**2 + (p.y-q.y)**2 + (p.z-q.z)**2)
+  })).filter(d => d.i !== idx && clusterVisible[DATA[d.i].c]);
+  dists.sort((a, b) => a.d - b.d);
+  return dists.slice(0, k);
+}
+
+let connectionLines = [];
+function clearConnectionLines() {
+  connectionLines.forEach(l => scene.remove(l));
+  connectionLines = [];
+}
+
+function drawConnectionLines(idx, neighbors) {
+  clearConnectionLines();
+  const p = DATA[idx];
+  const baseColor = new THREE.Color(CLUSTERS[p.c].color);
+  neighbors.forEach((nb, i) => {
+    const q = DATA[nb.i];
+    const geom = new THREE.BufferGeometry();
+    const verts = new Float32Array([p.x, p.y, p.z, q.x, q.y, q.z]);
+    geom.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+    const opacity = 0.5 - i * 0.08;
+    const mat = new THREE.LineBasicMaterial({
+      color: baseColor, transparent: true, opacity: opacity,
+      blending: THREE.AdditiveBlending, depthWrite: false
+    });
+    const line = new THREE.Line(geom, mat);
+    scene.add(line);
+    connectionLines.push(line);
+
+    // Dotted midpoint glow
+    const mid = new THREE.Vector3((p.x+q.x)/2, (p.y+q.y)/2, (p.z+q.z)/2);
+    const dotGeo = new THREE.BufferGeometry();
+    dotGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array([mid.x, mid.y, mid.z]), 3));
+    const dotMat = new THREE.PointsMaterial({
+      color: CLUSTERS[DATA[nb.i].c].color, size: 0.15, transparent: true,
+      opacity: 0.4, sizeAttenuation: true, blending: THREE.AdditiveBlending
+    });
+    const dot = new THREE.Points(dotGeo, dotMat);
+    scene.add(dot);
+    connectionLines.push(dot);
+  });
+}
+
+// ═══════════════════════════════════════
+// PLAYER DETAIL PANEL
+// ═══════════════════════════════════════
+const panel = document.getElementById('playerPanel');
+const panelClose = document.getElementById('panelClose');
+
+panelClose.addEventListener('click', () => {
+  panel.classList.remove('open');
+  clearConnectionLines();
+  searchHighlightIdx = -1;
+  searchInput.value = '';
+  updateVisibility();
+  highlightPoint.visible = false;
+});
+
+function openPlayerPanel(idx, neighbors) {
+  const p = DATA[idx];
+  const cl = CLUSTERS[p.c];
+
+  document.getElementById('panelName').textContent = p.n;
+  document.getElementById('panelName').style.color = cl.color;
+
+  document.getElementById('panelTeam').textContent = p.t + ' · ' + p.ns + ' season' + (p.ns > 1 ? 's' : '');
+
+  const badge = document.getElementById('panelCluster');
+  badge.textContent = cl.name;
+  badge.style.background = cl.bg;
+  badge.style.color = cl.color;
+
+  // Stats
+  const statsEl = document.getElementById('panelStats');
+  const skillPct = ((p.s - skillMin) / (skillMax - skillMin)) * 100;
+  const pctPct = ((p.p - 0.214) / (0.459 - 0.214)) * 100;
+  const volPct = ((p.v - volMin) / (volMax - volMin)) * 100;
+  const unastPct = (p.u / 0.704) * 100;
+  const stats = [
+    { label: '3PT%', value: (p.p * 100).toFixed(1) + '%', pct: pctPct, color: p.p >= 0.38 ? '#9ece6a' : p.p >= 0.35 ? '#e0af68' : '#f7768e' },
+    { label: 'Skill Estimate (HLM)', value: (p.s >= 0 ? '+' : '') + p.s.toFixed(4), pct: skillPct, color: p.s >= 0.02 ? '#9ece6a' : p.s >= 0 ? '#7dcfff' : '#f7768e' },
+    { label: '3PA per 36', value: p.v.toFixed(1), pct: volPct, color: '#7aa2f7' },
+    { label: 'Self-Creation Rate', value: (p.u * 100).toFixed(1) + '%', pct: unastPct, color: '#bb9af7' },
+    { label: 'Seasons (2013–25)', value: p.ns, pct: (p.ns / 12) * 100, color: '#6a7394' },
+  ];
+  statsEl.innerHTML = stats.map(s => `
+    <div class="panel-stat-row">
+      <span class="panel-stat-label">${s.label}</span>
+      <span class="panel-stat-value" style="color:${s.color}">${s.value}</span>
+    </div>
+    <div class="panel-stat-bar"><div class="panel-stat-bar-fill" style="width:${Math.max(2, Math.min(100, s.pct))}%;background:${s.color}"></div></div>
+  `).join('');
+
+  // Neighbors
+  const nbEl = document.getElementById('panelNeighbors');
+  nbEl.innerHTML = neighbors.map(nb => {
+    const q = DATA[nb.i];
+    return `<div class="panel-neighbor" data-idx="${nb.i}">
+      <span class="panel-neighbor-dot" style="background:${CLUSTERS[q.c].color}"></span>
+      <span class="panel-neighbor-name">${q.n}</span>
+      <span class="panel-neighbor-dist">${nb.d.toFixed(2)}</span>
+    </div>`;
+  }).join('');
+
+  // Click neighbors to navigate
+  nbEl.querySelectorAll('.panel-neighbor').forEach(el => {
+    el.addEventListener('click', () => {
+      selectPlayer(parseInt(el.dataset.idx));
+    });
+  });
+
+  panel.classList.add('open');
+}
+
+// ═══════════════════════════════════════
+// RESIZE
+// ═══════════════════════════════════════
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  pointMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+  highlightMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
+});
+
+// ═══════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════
+const clock = new THREE.Clock();
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta();
+
+  if (autoRotate) {
+    targetSpherical.theta += dt * 0.08;
+  }
+
+  // Smooth camera interpolation
+  spherical.theta += (targetSpherical.theta - spherical.theta) * 0.04;
+  spherical.phi += (targetSpherical.phi - spherical.phi) * 0.04;
+  spherical.radius += (targetSpherical.radius - spherical.radius) * 0.04;
+
+  camera.position.setFromSpherical(spherical);
+  camera.lookAt(0, 0, 0);
+
+  updateHover();
+  updateLabels();
+  const elapsed = clock.getElapsedTime();
+  pointMat.uniforms.uTime.value = elapsed;
+  starMat.uniforms.uTime.value = elapsed;
+  sunMat.uniforms.uTime.value = elapsed;
+  renderer.render(scene, camera);
+}
+
+animate();
+</script>
+</body>
+</html>
